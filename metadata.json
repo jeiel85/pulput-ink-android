@@ -1,0 +1,6 @@
+{
+  "name": "Pulpit Ink",
+  "description": "Mobile sermon transcription assistant with Room database, audio recording, and Gemini-powered proofreading and outline generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
