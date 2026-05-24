@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pulpit Ink — 설교를 녹음하면 AI가 자동으로 전사하고, 성경 구절을 정리하고, 아웃라인까지 만들어 주는 모바일 도구.">
+<meta name="theme-color" content="#0F1B36">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Pulpit Ink — Sermons, transcribed in ink.">
+<meta property="og:description" content="설교를 녹음하면 AI가 자동으로 전사하고, 성경 구절을 정리하고, 아웃라인까지 만들어 줍니다.">
+<meta property="og:image" content="assets/feature.png">
+<meta property="og:url" content="https://jeiel85.github.io/pulput-ink-android/">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" type="image/png" href="assets/icon.png">
+<link rel="apple-touch-icon" href="assets/icon.png">
+
+<title>Pulpit Ink — Sermons, transcribed in ink.</title>
+
+<style>
+  :root {
+    --ink-deep: #0F1B36;
+    --ink-mid: #1B2A4E;
+    --ink-light: #2D416E;
+    --gold: #D4A85A;
+    --gold-bright: #EBC882;
+    --paper: #F5F1E8;
+    --paper-dim: #D2C8B4;
+    --text: #E8E2D0;
+    --text-mute: #9FA8BD;
+    --border: rgba(212, 168, 90, 0.18);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
+    background: var(--ink-deep);
+    color: var(--text);
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+
+  .serif {
+    font-family: Georgia, "Times New Roman", "Nanum Myeongjo", serif;
+    letter-spacing: -0.02em;
+  }
+
+  a { color: var(--gold-bright); text-decoration: none; transition: color 0.15s; }
+  a:hover { color: var(--gold); text-decoration: underline; }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  /* ───────────────────────── Top nav ───────────────────────── */
+  header.topnav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(15, 27, 54, 0.92);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .topnav .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.9rem 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 600;
+    color: var(--paper);
+  }
+  .brand img { width: 30px; height: 30px; border-radius: 7px; }
+  .brand span.name { font-family: Georgia, serif; font-size: 1.1rem; }
+  .topnav nav { display: flex; gap: 1.6rem; font-size: 0.92rem; }
+  .topnav nav a { color: var(--text-mute); }
+  .topnav nav a:hover { color: var(--gold-bright); text-decoration: none; }
+  @media (max-width: 640px) {
+    .topnav nav { display: none; }
+  }
+
+  /* ───────────────────────── Hero ───────────────────────── */
+  .hero {
+    position: relative;
+    padding: 5rem 0 6rem;
+    background:
+      radial-gradient(ellipse at 25% 30%, var(--ink-light) 0%, var(--ink-deep) 70%);
+    overflow: hidden;
+  }
+  .hero::before {
+    /* Faint horizontal score lines for parchment feel */
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.018) 0,
+      rgba(255, 255, 255, 0.018) 1px,
+      transparent 1px,
+      transparent 22px
+    );
+    pointer-events: none;
+  }
+  .hero .container {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    align-items: center;
+    gap: 3rem;
+  }
+  .hero-art img {
+    width: 100%;
+    max-width: 360px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    filter: drop-shadow(0 16px 40px rgba(0, 0, 0, 0.45));
+    border-radius: 28%;
+  }
+  .hero-copy h1 {
+    font-family: Georgia, "Nanum Myeongjo", serif;
+    font-size: clamp(2.4rem, 5.5vw, 4rem);
+    font-weight: 700;
+    color: var(--paper);
+    line-height: 1.05;
+    margin-bottom: 0.4rem;
+    letter-spacing: -0.02em;
+  }
+  .hero-copy .rule {
+    width: 80px;
+    height: 3px;
+    background: var(--gold);
+    margin: 1.2rem 0 1.4rem;
+    border-radius: 2px;
+  }
+  .hero-copy .tagline-en {
+    color: var(--gold-bright);
+    font-size: 1.15rem;
+    letter-spacing: 0.01em;
+    margin-bottom: 0.3rem;
+  }
+  .hero-copy .tagline-ko {
+    color: var(--paper-dim);
+    font-size: 1.05rem;
+    margin-bottom: 2rem;
+  }
+  .cta-row {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1.5rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .btn:hover { transform: translateY(-1px); text-decoration: none; }
+  .btn-primary {
+    background: var(--gold);
+    color: var(--ink-deep);
+    box-shadow: 0 6px 20px rgba(212, 168, 90, 0.32);
+  }
+  .btn-primary:hover { background: var(--gold-bright); color: var(--ink-deep); box-shadow: 0 8px 24px rgba(212, 168, 90, 0.45); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--paper);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { background: rgba(212, 168, 90, 0.08); color: var(--gold-bright); }
+
+  @media (max-width: 800px) {
+    .hero { padding: 3rem 0 4rem; }
+    .hero .container { grid-template-columns: 1fr; gap: 2rem; }
+    .hero-art { order: -1; }
+    .hero-art img { max-width: 220px; }
+  }
+
+  /* ───────────────────────── Section common ───────────────────────── */
+  section.block {
+    padding: 5rem 0;
+    border-top: 1px solid var(--border);
+  }
+  section.block.alt {
+    background:
+      linear-gradient(to bottom, rgba(45, 65, 110, 0.18), transparent 80%),
+      var(--ink-deep);
+  }
+  .eyebrow {
+    display: inline-block;
+    color: var(--gold);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+  }
+  h2.section-title {
+    font-family: Georgia, "Nanum Myeongjo", serif;
+    font-size: clamp(1.8rem, 3.4vw, 2.4rem);
+    color: var(--paper);
+    margin-bottom: 0.6rem;
+    line-height: 1.2;
+  }
+  .section-lead {
+    color: var(--text-mute);
+    max-width: 640px;
+    margin-bottom: 3rem;
+    font-size: 1.02rem;
+  }
+
+  /* ───────────────────────── Features ───────────────────────── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+  }
+  .feature-card {
+    background: rgba(45, 65, 110, 0.25);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.8rem 1.5rem;
+    transition: transform 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .feature-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(212, 168, 90, 0.5);
+    background: rgba(45, 65, 110, 0.4);
+  }
+  .feature-card .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    background: rgba(212, 168, 90, 0.14);
+    color: var(--gold-bright);
+    font-size: 1.4rem;
+    margin-bottom: 1rem;
+  }
+  .feature-card h3 {
+    color: var(--paper);
+    font-family: Georgia, serif;
+    font-size: 1.15rem;
+    margin-bottom: 0.5rem;
+  }
+  .feature-card p {
+    color: var(--text-mute);
+    font-size: 0.94rem;
+    line-height: 1.6;
+  }
+
+  /* ───────────────────────── Flow / How it works ───────────────────────── */
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    position: relative;
+    margin-top: 1rem;
+  }
+  .flow::before {
+    content: "";
+    position: absolute;
+    top: 36px;
+    left: 12%;
+    right: 12%;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--gold) 20%, var(--gold) 80%, transparent);
+    z-index: 0;
+  }
+  .flow .step {
+    position: relative;
+    text-align: center;
+    padding: 0 0.6rem;
+  }
+  .flow .step .num {
+    position: relative;
+    z-index: 1;
+    width: 72px;
+    height: 72px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    background: var(--ink-deep);
+    border: 2px solid var(--gold);
+    color: var(--gold-bright);
+    font-family: Georgia, serif;
+    font-size: 1.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(212, 168, 90, 0.18);
+  }
+  .flow .step h4 {
+    color: var(--paper);
+    font-family: Georgia, serif;
+    font-size: 1.05rem;
+    margin-bottom: 0.4rem;
+  }
+  .flow .step p {
+    color: var(--text-mute);
+    font-size: 0.88rem;
+    line-height: 1.55;
+  }
+  @media (max-width: 700px) {
+    .flow { grid-template-columns: repeat(2, 1fr); gap: 1.5rem 0; }
+    .flow::before { display: none; }
+  }
+
+  /* ───────────────────────── Privacy block ───────────────────────── */
+  .privacy-block {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 3rem;
+    align-items: center;
+  }
+  .privacy-block .label-art {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .privacy-seal {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--ink-mid), var(--ink-deep) 75%);
+    border: 2px solid var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: var(--gold-bright);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  }
+  .privacy-seal .glyph {
+    font-family: Georgia, serif;
+    font-size: 2.6rem;
+    line-height: 1;
+  }
+  .privacy-seal .text {
+    margin-top: 0.4rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--paper-dim);
+  }
+  .privacy-block ul {
+    list-style: none;
+    padding: 0;
+  }
+  .privacy-block li {
+    padding: 0.65rem 0;
+    color: var(--text);
+    border-bottom: 1px dashed var(--border);
+    display: flex;
+    gap: 0.7rem;
+    align-items: flex-start;
+  }
+  .privacy-block li::before {
+    content: "✓";
+    color: var(--gold);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  @media (max-width: 800px) {
+    .privacy-block { grid-template-columns: 1fr; gap: 1.5rem; }
+    .privacy-seal { width: 140px; height: 140px; }
+    .privacy-seal .glyph { font-size: 1.9rem; }
+  }
+
+  /* ───────────────────────── CTA strip ───────────────────────── */
+  .cta-strip {
+    background:
+      radial-gradient(ellipse at 70% 50%, rgba(212, 168, 90, 0.18), transparent 60%),
+      var(--ink-mid);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 3.5rem 0;
+    text-align: center;
+  }
+  .cta-strip h3 {
+    font-family: Georgia, serif;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    color: var(--paper);
+    margin-bottom: 0.6rem;
+  }
+  .cta-strip p {
+    color: var(--text-mute);
+    margin-bottom: 1.5rem;
+  }
+
+  /* ───────────────────────── Footer ───────────────────────── */
+  footer {
+    padding: 2.5rem 0 3rem;
+    text-align: center;
+    color: var(--text-mute);
+    font-size: 0.88rem;
+  }
+  footer .links {
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 1.4rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  footer .links a { color: var(--paper-dim); }
+  footer .copy { opacity: 0.6; }
+
+  /* Subtle waveform decoration */
+  .waveform-deco {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 18px;
+    vertical-align: middle;
+  }
+  .waveform-deco i {
+    display: inline-block;
+    width: 3px;
+    background: var(--gold);
+    border-radius: 1.5px;
+  }
+</style>
+</head>
+<body>
+
+<header class="topnav">
+  <div class="container row">
+    <a class="brand" href="#top">
+      <img src="assets/icon.png" alt="Pulpit Ink logo">
+      <span class="name">Pulpit Ink</span>
+    </a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/jeiel85/pulput-ink-android">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ─────────── Hero ─────────── -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-art">
+        <img src="assets/icon-1024.png" alt="Pulpit Ink app icon">
+      </div>
+      <div class="hero-copy">
+        <h1 class="serif">Pulpit Ink</h1>
+        <div class="rule"></div>
+        <div class="tagline-en">Sermons, transcribed in ink.</div>
+        <div class="tagline-ko">설교를 녹음하면 AI가 글로, 성경 구절로, 아웃라인으로 옮겨 줍니다.</div>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/jeiel85/pulput-ink-android">
+            <span>View on GitHub</span>
+          </a>
+          <a class="btn btn-ghost" href="privacy-policy.html">개인정보처리방침</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── Features ─────────── -->
+  <section class="block" id="features">
+    <div class="container">
+      <span class="eyebrow">Features</span>
+      <h2 class="section-title">강단에서 문서까지, 한 흐름.</h2>
+      <p class="section-lead">탭 한 번으로 시작되는 녹음부터 마크다운 아웃라인까지 — 설교자가 직접 하던 반복 작업을 AI가 대신합니다.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="icon">🎙</div>
+          <h3>One-tap 녹음</h3>
+          <p>강단·차·서재 어디서든 마이크 한 번이면 시작. 실시간 상태 표시로 입력 여부를 한눈에 확인합니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">✦</div>
+          <h3>AI 자동 전사</h3>
+          <p>OpenAI Whisper로 한국어·영어 설교를 정확히 옮깁니다. 인터넷 없이도 동작하는 단말 내 모델(tiny/base/small) 지원.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">✝</div>
+          <h3>성경 구절 정리</h3>
+          <p>Gemini AI가 본문 속 인용을 찾아 「창세기 1:1」 같은 표준 표기로 다듬고 볼드 처리합니다.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">≡</div>
+          <h3>아웃라인 자동 생성</h3>
+          <p>서론·본론·결론·핵심 메시지·적용점까지 마크다운으로 정리. 언제든 재컴파일.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">⌕</div>
+          <h3>보관함 + 검색</h3>
+          <p>모든 설교를 단말 내부에 저장. 제목·본문·태그로 즉시 검색.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">⇪</div>
+          <h3>편집·복사·공유</h3>
+          <p>블록 단위 편집, 클립보드 복사, 다른 앱(노션·카톡·메모)으로 공유.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── How it works ─────────── -->
+  <section class="block alt" id="how">
+    <div class="container">
+      <span class="eyebrow">How it works</span>
+      <h2 class="section-title">음성에서 잉크로, 네 단계.</h2>
+      <p class="section-lead">목회자가 자기 손으로 하던 일을 따라가는 흐름. 각 단계에서 멈추거나, 편집하거나, 다시 컴파일할 수 있습니다.</p>
+
+      <div class="flow">
+        <div class="step">
+          <div class="num">1</div>
+          <h4>Record</h4>
+          <p>설교를 녹음합니다. 백그라운드 녹음은 없으며 사용자가 직접 시작·종료합니다.</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <h4>Transcribe</h4>
+          <p>Whisper가 오디오를 텍스트로 옮깁니다. 클라우드 또는 로컬 모델 선택 가능.</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <h4>Refine</h4>
+          <p>Gemini가 성경 구절을 표준 표기로 다듬고 띄어쓰기를 교정합니다.</p>
+        </div>
+        <div class="step">
+          <div class="num">4</div>
+          <h4>Outline</h4>
+          <p>전사 본문을 바탕으로 설교 아웃라인을 마크다운으로 자동 생성합니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── Privacy ─────────── -->
+  <section class="block" id="privacy">
+    <div class="container">
+      <span class="eyebrow">Privacy</span>
+      <h2 class="section-title">설교는 사적인 것이라야 합니다.</h2>
+      <p class="section-lead">Pulpit Ink는 분석 SDK·광고 SDK·계정 시스템을 일체 포함하지 않습니다. 모든 데이터는 기본적으로 단말 안에서만 흐릅니다.</p>
+
+      <div class="privacy-block">
+        <div class="label-art">
+          <div class="privacy-seal">
+            <div class="glyph">No Cloud</div>
+            <div class="text">By Default</div>
+          </div>
+        </div>
+        <ul>
+          <li>녹음·전사·아웃라인 모두 단말 내 Room DB에만 저장</li>
+          <li>회원가입·로그인·계정 시스템 없음</li>
+          <li>광고 식별자(AAID)·위치·기기 ID 일체 수집 없음</li>
+          <li>분석/크래시 SDK 미탑재</li>
+          <li>AI 기능 호출 시에만 사용자가 등록한 API 키로 OpenAI / Google에 HTTPS 전송</li>
+          <li>로컬 Whisper 모델 사용 시 전 과정 오프라인 가능</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── CTA strip ─────────── -->
+  <section class="cta-strip">
+    <div class="container">
+      <h3 class="serif">Coming soon to Google Play.</h3>
+      <p>현재 내부 테스트 단계. 출시 알림을 받고 싶으면 GitHub 저장소를 Watch 해 주세요.</p>
+      <div class="cta-row" style="justify-content: center;">
+        <a class="btn btn-primary" href="https://github.com/jeiel85/pulput-ink-android">
+          <span>★ Watch on GitHub</span>
+        </a>
+        <a class="btn btn-ghost" href="mailto:pedaiah85@gmail.com">Contact</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="container">
+    <div class="links">
+      <a href="https://github.com/jeiel85/pulput-ink-android">GitHub</a>
+      <a href="privacy-policy.html">개인정보처리방침</a>
+      <a href="privacy-policy.html#english">Privacy Policy</a>
+      <a href="mailto:pedaiah85@gmail.com">Contact</a>
+    </div>
+    <div class="copy">
+      <span class="waveform-deco" aria-hidden="true">
+        <i style="height:6px"></i><i style="height:14px"></i><i style="height:9px"></i><i style="height:16px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:6px"></i>
+      </span>
+      &nbsp;&nbsp;© 2026 AI Studio · Pulpit Ink · Crafted with care for those who preach.
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

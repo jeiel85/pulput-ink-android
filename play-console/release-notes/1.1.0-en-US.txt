@@ -1,0 +1,8 @@
+[Pulpit Ink 1.1.0 — initial release]
+
+• Record sermons and transcribe them with OpenAI Whisper (Korean + English)
+• Optional on-device Whisper models (tiny/base/small) for fully offline use
+• Gemini AI cleans up and standardizes scripture references
+• Auto-generated sermon outlines (intro / body / conclusion)
+• On-device library with title / body / tag search
+• Block-level transcript editing, clipboard copy, share to any app
