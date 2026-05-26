@@ -43,7 +43,7 @@
 9. **테스트 트랙 (내부 테스트)** — AAB 업로드 → 테스터 1명 이상 추가 후 실행 검증.
 10. **프로덕션 출시** — 전 항목 ✅ 되면 출시 신청 → 심사 (보통 1~7일).
 
-## 빌드 아티팩트 생성
+## 빌드 아티팩트 생성 및 릴리즈 파일 배포 표준규격 (SOP)
 
 AAB(Android App Bundle, Play Console 필수)는 다음 명령으로 생성한다.
 
@@ -51,7 +51,30 @@ AAB(Android App Bundle, Play Console 필수)는 다음 명령으로 생성한다
 .\gradlew :app:bundleRelease
 ```
 
-결과물: `app/build/outputs/bundle/release/app-release.aab` (서명된 상태로 즉시 업로드 가능).
+### 📌 릴리즈 파일 명명법 및 배포 규격 (박제)
+
+다시는 까먹지 않도록 정리된 BrioDo, MarkLeaf 등 타 안드로이드 프로젝트들과 완전히 동일한 **정식 릴리즈 배포 공식 규격**입니다.
+
+1. **산출물 파일명 정의**:
+   - **AAB 파일**: `<AppName>-v<VersionName>-vc<VersionCode>.aab` (예: `PulpitInk-v1.2.0-vc3.aab`)
+   - **릴리즈 노트 파일**: `<AppName>-v<VersionName>-vc<VersionCode>-release-notes.txt` (예: `PulpitInk-v1.2.0-vc3-release-notes.txt`)
+
+2. **통합 다국어 출시 노트 (Combined Release Notes) 형식**:
+   Play Console 업로드 시 한눈에 보고 붙여넣을 수 있도록 다국어 태그 형식을 적용합니다.
+   ```xml
+   <ko-KR>
+   - 한국어 출시 내용
+   </ko-KR>
+   <en-US>
+   - English release content
+   </en-US>
+   ```
+
+3. **자동 배포 대상 경로**:
+   릴리즈 빌드 완료 시 개발자가 직접 폴더를 탐색하지 않고 웹 업로드가 가능하도록 **바탕 화면에 자동 내보내기**합니다.
+   - **OneDrive 바탕 화면**: `C:\Users\jeiel\OneDrive\바탕 화면\`
+   - **로컬 바탕 화면**: `C:\Users\jeiel\Desktop\`
+   - **프로젝트 내 저장소**: `d:\Project\pulpit-ink-android\.build-outputs\`
 
 ## 결정된 값
 
