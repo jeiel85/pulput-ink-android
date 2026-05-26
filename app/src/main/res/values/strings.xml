@@ -1,3 +1,110 @@
 <resources>
     <string name="app_name">Pulpit Ink</string>
+    <string name="app_title">Pulpit Ink</string>
+    <string name="app_subtitle">Mobile Sermon Transcription Assistant</string>
+    <string name="record_sermon">Record Sermon</string>
+    <string name="search_placeholder">Search sermons, scriptures, or tags...</string>
+    <string name="empty_pulpit_title">Your Pulpit is Empty</string>
+    <string name="empty_search_title">No sermon matches found</string>
+    <string name="empty_pulpit_desc">Tap \'Record Sermon\' below to capture audio, transcribe scripture alignments, and compile outlines automatically.</string>
+    <string name="empty_search_desc">Try adjusting your query or keywords to locate your transcribed documents.</string>
+    <string name="delete_dialog_title">Purge Sermon Transcript?</string>
+    <string name="delete_dialog_desc">Are you sure you want to delete \'%1$s\'? This action cannot be undone and will delete associated wave records, drafts, and outlines.</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    
+    <!-- Status Badges -->
+    <string name="status_recording">Recording</string>
+    <string name="status_transcribing">AI Ink Sync</string>
+    <string name="status_done">Transcribed</string>
+    <string name="status_failed">Error</string>
+    <string name="status_queue">Queue</string>
+    
+    <!-- Recording Screen -->
+    <string name="recording_screen_title">Pulpit Voice Capture</string>
+    <string name="recording_status_recording">Recording Sermon Audio...</string>
+    <string name="recording_status_configure">Configure Sermon Preach Metadata</string>
+    <string name="recording_mic_live">Microphone is live. Pray, preach, and teach.</string>
+    <string name="recording_configure_desc">Provide a title and theme focus for transcription. Standard themes will fall back automatically.</string>
+    <string name="sermon_title_label">Sermon Draft Title</string>
+    <string name="sermon_title_placeholder">e.g., The Beauty of Assurance</string>
+    <string name="sermon_topic_label">Theological Core Theme (Dynamic AI Cue)</string>
+    <string name="sermon_topic_placeholder">e.g. Grace, Forgiveness, Prodigal Son...</string>
+    <string name="tap_to_start_recording">Tap to start capturing pulpit audio</string>
+    <string name="discard">Discard</string>
+    <string name="transcribe">Transcribe</string>
+    <string name="rec_live">REC LIVE (MIC-HD)</string>
+    <string name="mic_error">Microphone calibration failed. Double-check permissions.</string>
+    <string name="rec_saved">Recording saved. Starting transcription...</string>
+    <string name="rec_complete">Transcription Complete!</string>
+    <string name="rec_removed">Sermon removed from records.</string>
+    <string name="toast_proofreading">AI is proofreading references and formatting nouns...</string>
+    <string name="toast_proofread_success">References successfully formatted!</string>
+    <string name="toast_proofread_failed">Proofreading failed. Verify API configuration and connection.</string>
+    <string name="toast_outline_compiling">Re-compiling markdown outlines...</string>
+    <string name="toast_outline_success">Outline successfully compiled!</string>
+    <string name="toast_outline_failed">Compilation failed. Check your OpenAI API key and connection.</string>
+
+    <!-- Detail Screen -->
+    <string name="tab_brief">Brief &amp; Player</string>
+    <string name="tab_transcript">Transcript Editor</string>
+    <string name="tab_outline">Sermon Outline (AI)</string>
+    <string name="tab_actions">AI Actions</string>
+    <string name="sermon_metadata_title">Sermon Metadata</string>
+    <string name="metadata_length">Length</string>
+    <string name="metadata_date">Date Captured</string>
+    <string name="scriptural_badges">Scriptural Core Badges:</string>
+    <string name="live_recording_file">Live Recording File</string>
+    <string name="audio_source_ok">Audio source OK!</string>
+    <string name="audio_source_error">Underlying physical audio cache not found.</string>
+    <string name="executive_review_title">Sermon Executive Review</string>
+    <string name="summary_compiling">A summary is compiling... Make sure your transcription flow completed correctly.</string>
+    
+    <!-- Transcript Tab -->
+    <string name="aligning_records">Aligning translation index records...</string>
+    <string name="no_transcript">No transcript records. Capture elements or start manually.</string>
+    <string name="edit_segment_title">Edit Segment Draft</string>
+    <string name="save_modifications">Save Modifications</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="speaker_default">Speaker</string>
+    <string name="tap_to_edit">Tap block to edit text</string>
+    
+    <!-- Outline Tab -->
+    <string name="homiletics_draft_title">Homiletics Study Draft</string>
+    <string name="re_compile">Re-Compile</string>
+    <string name="no_outline">No outline compiled yet. Tap \'Re-Compile Outline\' to process.</string>
+    
+    <!-- Actions Tab -->
+    <string name="ai_ops_title">Pulpit AI Operations Desk</string>
+    <string name="theological_proofreading_title">AI Theological Proofreading</string>
+    <string name="theological_proofreading_desc">Runs advanced layout checkers to locate spelling anomalies, properly bold scripture quotes, and auto-correct Biblical books numbering systems.</string>
+    <string name="recompile_outline_title">Recompile Sermon Outline</string>
+    <string name="recompile_outline_desc">Regenerates full-structure markdown bulletins and cue cards from the updated, edited transcription records.</string>
+    <string name="exports_channels_title">Exports &amp; Sharing Channels</string>
+    <string name="copy_transcript">Copy Transcript</string>
+    <string name="copy_outline">Copy Outline</string>
+    <string name="share_package">Share Full Sermon Draft Package</string>
+    <string name="copied_toast">%1$s copied to clipboard!</string>
+
+    <!-- Whisper Manager -->
+    <string name="whisper_manager_title">OpenAI Whisper Model Desk</string>
+    <string name="storage_used">Local storage occupied:</string>
+    <string name="model_tiny_title">Whisper Tiny (Lightweight)</string>
+    <string name="model_tiny_desc">Very Fast, Low accuracy. Recommended for low-spec devices or quick checks.</string>
+    <string name="model_base_title">Whisper Base (Balanced)</string>
+    <string name="model_base_desc">Fast, Moderate accuracy. Standard choice for most sermons.</string>
+    <string name="model_small_title">Whisper Small (High Precision)</string>
+    <string name="model_small_desc">Slower, High accuracy. Best semantic alignment for deep homiletics.</string>
+    <string name="not_downloaded">Not Installed</string>
+    <string name="downloading">Downloading (%1$d%%)</string>
+    <string name="downloaded">Installed</string>
+    <string name="download_button">Install (%1$s)</string>
+    <string name="delete_button">Delete Model</string>
+    <string name="selected_label">Active</string>
+    <string name="select_label">Select</string>
+    <string name="whisper_info">Select your local speech-to-text model. Cloud API requires OPENAI_API_KEY, while local mode runs directly offline using loaded ggml .bin models.</string>
+    <string name="toast_download_start">Downloading Whisper %1$s model...</string>
+    <string name="toast_download_success">Whisper %1$s model successfully downloaded!</string>
+    <string name="toast_download_failed">Failed to download model. Check network settings.</string>
+    <string name="toast_delete_success">Whisper %1$s model removed to free up space.</string>
 </resources>

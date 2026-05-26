@@ -6,7 +6,7 @@
 
 | 항목 | 값 |
 |---|---|
-| Application ID | `com.aistudio.pulpitink.xkmfzy` |
+| Application ID | `io.pulpit.ink` |
 | 앱 이름 | Pulpit Ink |
 | Version Code | 2 |
 | Version Name | 1.1.0 |

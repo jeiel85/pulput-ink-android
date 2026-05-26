@@ -376,6 +376,51 @@ def save(img: Image.Image, name: str):
     print(f"  wrote {out} ({img.size[0]}x{img.size[1]})")
 
 
+def export_android_icons():
+    print("Exporting Android launcher icons...")
+    res_dir = Path(__file__).resolve().parent.parent.parent / "app" / "src" / "main" / "res"
+    if not res_dir.exists():
+        print(f"Error: Android res folder not found at {res_dir}")
+        return
+
+    # Master icons
+    master_icon = make_app_icon(1024)
+    master_fg = make_adaptive_foreground()
+    master_bg = make_adaptive_background()
+
+    densities = {
+        "mdpi": (48, 108),
+        "hdpi": (72, 162),
+        "xhdpi": (96, 216),
+        "xxhdpi": (144, 324),
+        "xxxhdpi": (192, 432)
+    }
+
+    for dens, (icon_sz, adapt_sz) in densities.items():
+        folder = res_dir / f"mipmap-{dens}"
+        folder.mkdir(parents=True, exist_ok=True)
+        
+        # 1. ic_launcher.webp
+        icon_path = folder / "ic_launcher.webp"
+        master_icon.resize((icon_sz, icon_sz), Image.Resampling.LANCZOS).save(icon_path, "WEBP", lossless=True)
+        print(f"  wrote {icon_path} ({icon_sz}x{icon_sz})")
+
+        # 2. ic_launcher_round.webp
+        round_path = folder / "ic_launcher_round.webp"
+        master_icon.resize((icon_sz, icon_sz), Image.Resampling.LANCZOS).save(round_path, "WEBP", lossless=True)
+        print(f"  wrote {round_path} ({icon_sz}x{icon_sz})")
+
+        # 3. ic_launcher_foreground.webp
+        fg_path = folder / "ic_launcher_foreground.webp"
+        master_fg.resize((adapt_sz, adapt_sz), Image.Resampling.LANCZOS).save(fg_path, "WEBP", lossless=True)
+        print(f"  wrote {fg_path} ({adapt_sz}x{adapt_sz})")
+
+        # 4. ic_launcher_background.webp
+        bg_path = folder / "ic_launcher_background.webp"
+        master_bg.resize((adapt_sz, adapt_sz), Image.Resampling.LANCZOS).save(bg_path, "WEBP", lossless=True)
+        print(f"  wrote {bg_path} ({adapt_sz}x{adapt_sz})")
+
+
 def main():
     print("Generating Pulpit Ink brand assets...")
     OUT.mkdir(parents=True, exist_ok=True)
@@ -389,8 +434,11 @@ def main():
 
     save(make_feature_graphic(), "feature-graphic-1024x500.png")
     save(make_landing_hero(), "landing-hero-1600x900.png")
+
+    export_android_icons()
     print("Done.")
 
 
 if __name__ == "__main__":
     main()
+

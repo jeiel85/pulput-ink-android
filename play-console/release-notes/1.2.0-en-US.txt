@@ -1,0 +1,5 @@
+[Pulpit Ink 1.2.0 — Brand Identity & App Icon Update]
+
+• Replaced the default launcher icon with the premium custom Pulpit Ink brand icon
+• Added modern lossless WebP adaptive foreground/background and multi-density legacy icons
+• Fully updated Google Play Store graphic and promotional assets

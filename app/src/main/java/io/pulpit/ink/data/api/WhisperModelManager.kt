@@ -1,0 +1,104 @@
+package io.pulpit.ink.data.api
+
+import android.content.Context
+import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+
+class WhisperModelManager(private val context: Context) {
+    private val TAG = "WhisperModelManager"
+    private val client = OkHttpClient()
+
+    fun getModelFile(config: WhisperModelConfig): File {
+        return File(context.filesDir, config.filename)
+    }
+
+    fun isModelDownloaded(config: WhisperModelConfig): Boolean {
+        val file = getModelFile(config)
+        return file.exists() && file.length() > 0
+    }
+
+    fun deleteModel(config: WhisperModelConfig): Boolean {
+        val file = getModelFile(config)
+        if (file.exists()) {
+            return file.delete()
+        }
+        return false
+    }
+
+    fun getStorageUsageBytes(): Long {
+        var total = 0L
+        WhisperModelConfig.values().forEach { config ->
+            val file = getModelFile(config)
+            if (file.exists()) {
+                total += file.length()
+            }
+        }
+        return total
+    }
+
+    suspend fun downloadModel(
+        config: WhisperModelConfig,
+        onProgress: (Int) -> Unit
+    ): Boolean = withContext(Dispatchers.IO) {
+        val file = getModelFile(config)
+        val tempFile = File(context.filesDir, "${config.filename}.tmp")
+
+        try {
+            val request = Request.Builder().url(config.downloadUrl).build()
+            val response = client.newCall(request).execute()
+
+            if (!response.isSuccessful) {
+                Log.e(TAG, "Failed to download model: ${response.message}")
+                return@withContext false
+            }
+
+            val body = response.body ?: return@withContext false
+            val contentLength = body.contentLength()
+            val inputStream: InputStream = body.byteStream()
+            val outputStream = FileOutputStream(tempFile)
+
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            var totalBytesRead = 0L
+
+            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                outputStream.write(buffer, 0, bytesRead)
+                totalBytesRead += bytesRead
+                if (contentLength > 0) {
+                    val progress = ((totalBytesRead * 100) / contentLength).toInt()
+                    onProgress(progress)
+                }
+            }
+
+            outputStream.flush()
+            outputStream.close()
+            inputStream.close()
+
+            // Rename temp file to final file safely
+            if (tempFile.exists()) {
+                if (file.exists()) {
+                    file.delete()
+                }
+                val success = tempFile.renameTo(file)
+                if (success) {
+                    Log.d(TAG, "Successfully downloaded and renamed ${config.filename}")
+                    return@withContext true
+                }
+            }
+            return@withContext false
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error downloading model ${config.modelKey}", e)
+            if (tempFile.exists()) {
+                tempFile.delete()
+            }
+            return@withContext false
+        }
+    }
+}
