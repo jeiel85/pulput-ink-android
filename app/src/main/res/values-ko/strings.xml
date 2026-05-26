@@ -1,13 +1,13 @@
 <resources>
     <string name="app_name">Pulpit Ink</string>
     <string name="app_title">Pulpit Ink</string>
-    <string name="app_subtitle">모바일 설교 비서 및 AI 전사 도구</string>
+    <string name="app_subtitle">모바일 설교 비서 및 AI 필기 도구</string>
     <string name="record_sermon">설교 녹음</string>
     <string name="search_placeholder">설교, 성경 구절 또는 태그 검색...</string>
     <string name="empty_pulpit_title">설교 보관함이 비어 있습니다</string>
     <string name="empty_search_title">일치하는 설교가 없습니다</string>
     <string name="empty_pulpit_desc">아래의 \'설교 녹음\' 버튼을 눌러 설교 음성을 기록하고, 성경 구절을 분석하며, AI 아웃라인 생성을 시작해 보세요.</string>
-    <string name="empty_search_desc">검색어 나 키워드를 변경하여 녹음 및 전사된 문서를 다시 찾아보세요.</string>
+    <string name="empty_search_desc">검색어 나 키워드를 변경하여 녹음 및 필기된 노트를 다시 찾아보세요.</string>
     <string name="delete_dialog_title">설교 기록을 삭제하시겠습니까?</string>
     <string name="delete_dialog_desc">\'%1$s\' 설교를 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, 녹음 파일 및 관련된 모든 초안, 요약본, AI 개요서가 함께 삭제됩니다.</string>
     <string name="delete">삭제</string>
@@ -16,7 +16,7 @@
     <!-- Status Badges -->
     <string name="status_recording">녹음 중</string>
     <string name="status_transcribing">AI 동기화 중</string>
-    <string name="status_done">전사 완료</string>
+    <string name="status_done">필기 완료</string>
     <string name="status_failed">오류</string>
     <string name="status_queue">대기 중</string>
     
@@ -25,18 +25,18 @@
     <string name="recording_status_recording">설교 음성 녹음 중...</string>
     <string name="recording_status_configure">설교 메타데이터 설정</string>
     <string name="recording_mic_live">마이크가 켜져 있습니다. 은혜로운 말씀을 자유롭게 전하세요.</string>
-    <string name="recording_configure_desc">전사 작업의 정확도를 높이기 위해 설교 제목과 핵심 신학적 주제를 입력해 주세요.</string>
+    <string name="recording_configure_desc">AI 필기의 정확도를 높이기 위해 설교 제목과 핵심 신학적 주제를 입력해 주세요.</string>
     <string name="sermon_title_label">설교 제목</string>
     <string name="sermon_title_placeholder">예: 참된 안식과 구원의 확신</string>
     <string name="sermon_topic_label">신학적 핵심 주제 (AI 동적 힌트)</string>
     <string name="sermon_topic_placeholder">예: 은혜, 용서, 탕자의 비유, 믿음...</string>
     <string name="tap_to_start_recording">터치하여 설교 녹음을 시작합니다</string>
     <string name="discard">취소</string>
-    <string name="transcribe">전사 요청</string>
+    <string name="transcribe">필기 시작</string>
     <string name="rec_live">실시간 녹음 중 (HD-마이크)</string>
     <string name="mic_error">마이크 캘리브레이션에 실패했습니다. 권한 설정을 확인하세요.</string>
-    <string name="rec_saved">녹음이 저장되었습니다. 전사 작업을 시작합니다...</string>
-    <string name="rec_complete">전사 및 동기화가 완료되었습니다!</string>
+    <string name="rec_saved">녹음이 저장되었습니다. 필기를 시작합니다...</string>
+    <string name="rec_complete">설교 필기 및 동기화가 완료되었습니다!</string>
     <string name="rec_removed">설교 기록이 보관함에서 제거되었습니다.</string>
     <string name="toast_proofreading">AI가 오탈자를 보정하고 성경 레퍼런스를 정리하고 있습니다...</string>
     <string name="toast_proofread_success">성경 구절 및 고유명사 교정이 완료되었습니다!</string>
@@ -47,7 +47,7 @@
 
     <!-- Detail Screen -->
     <string name="tab_brief">요약 및 플레이어</string>
-    <string name="tab_transcript">설교 전사 에디터</string>
+    <string name="tab_transcript">설교 필기 노트</string>
     <string name="tab_outline">설교 개요서 (AI)</string>
     <string name="tab_actions">AI 작업 공간</string>
     <string name="sermon_metadata_title">설교 상세 정보</string>
@@ -58,12 +58,12 @@
     <string name="audio_source_ok">오디오 파일 확인 완료!</string>
     <string name="audio_source_error">캐시된 오디오 파일을 찾을 수 없습니다.</string>
     <string name="executive_review_title">설교 핵심 요약서</string>
-    <string name="summary_compiling">요약서를 작성하는 중입니다... 전사 작업이 정상적으로 끝났는지 확인하세요.</string>
+    <string name="summary_compiling">요약서를 작성하는 중입니다... 필기 작업이 정상적으로 끝났는지 확인하세요.</string>
     
     <!-- Transcript Tab -->
     <string name="aligning_records">번역 인덱스 레코드를 정렬하는 중입니다...</string>
-    <string name="no_transcript">전사된 기록이 없습니다. 먼저 음성을 녹음해 보세요.</string>
-    <string name="edit_segment_title">전사 문장 수정</string>
+    <string name="no_transcript">필기된 기록이 없습니다. 먼저 설교를 녹음해 보세요.</string>
+    <string name="edit_segment_title">필기 문장 수정</string>
     <string name="save_modifications">변경 사항 저장</string>
     <string name="dismiss">닫기</string>
     <string name="speaker_default">설교자</string>
@@ -79,9 +79,9 @@
     <string name="theological_proofreading_title">AI 신학 문맥 교정</string>
     <string name="theological_proofreading_desc">신학 문맥 분석 및 오탈자 검사기를 수행하여 문장을 다듬고, 인용된 성경 구절을 올바르게 볼드 처리하며 성경 구절 표기법을 표준식으로 포맷팅합니다.</string>
     <string name="recompile_outline_title">설교 개요서 재생성</string>
-    <string name="recompile_outline_desc">수정 및 편집된 전사 텍스트 기록들을 기반으로 전체 마크다운 개요서 및 주보용 카드 뉴스를 동적으로 다시 작성합니다.</string>
+    <string name="recompile_outline_desc">수정 및 편집된 필기 노트 기록들을 기반으로 전체 마크다운 개요서 및 주보용 카드 뉴스를 동적으로 다시 작성합니다.</string>
     <string name="exports_channels_title">공유 및 내보내기</string>
-    <string name="copy_transcript">전사 텍스트 복사</string>
+    <string name="copy_transcript">필기 노트 복사</string>
     <string name="copy_outline">개요 마크다운 복사</string>
     <string name="share_package">설교 종합 패키지 공유</string>
     <string name="copied_toast">%1$s 클립보드에 복사되었습니다!</string>
@@ -94,7 +94,7 @@
     <string name="model_base_title">Whisper Base (표준형 모델)</string>
     <string name="model_base_desc">빠름, 표준적인 정확도. 일반적인 설교 환경에서 가장 무난하게 추천.</string>
     <string name="model_small_title">Whisper Small (고정밀 모델)</string>
-    <string name="model_small_desc">느림, 매우 뛰어난 정확도. 세밀한 텍스트 전사 및 신학 주석 분석 시 추천.</string>
+    <string name="model_small_desc">느림, 매우 뛰어난 정확도. 세밀한 설교 필기 및 신학 주석 분석 시 추천.</string>
     <string name="not_downloaded">미설치</string>
     <string name="downloading">다운로드 중 (%1$d%%)</string>
     <string name="downloaded">설치 완료</string>
@@ -102,7 +102,7 @@
     <string name="delete_button">모델 파일 삭제</string>
     <string name="selected_label">사용 중</string>
     <string name="select_label">선택</string>
-    <string name="whisper_info">설교 음성을 텍스트로 변환할 로컬 Whisper 모델을 관리합니다. 클라우드 전사는 secrets의 OPENAI_API_KEY를 이용하고, 로컬 오프라인 모드는 다운로드된 ggml .bin 모델을 직접 구동합니다.</string>
+    <string name="whisper_info">설교 음성을 텍스트로 변환할 로컬 Whisper 모델을 관리합니다. 클라우드 필기는 secrets의 OPENAI_API_KEY를 이용하고, 로컬 오프라인 모드는 다운로드된 ggml .bin 모델을 직접 구동합니다.</string>
     <string name="toast_download_start">Whisper %1$s 모델 다운로드를 시작합니다...</string>
     <string name="toast_download_success">Whisper %1$s 모델 다운로드가 성공적으로 완료되었습니다!</string>
     <string name="toast_download_failed">모델 다운로드에 실패했습니다. 인터넷 상태를 확인해 주세요.</string>
