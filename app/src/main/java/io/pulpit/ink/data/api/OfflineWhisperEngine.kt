@@ -43,7 +43,11 @@ class OfflineWhisperEngine(private val context: Context) : SpeechToTextEngine {
         Log.d(TAG, "Decoding audio file to PCM...")
         val pcmData = AudioDecoder.decodeToPcm(audioFile)
         if (pcmData.isEmpty()) {
-            throw IllegalStateException("Failed to decode audio file or audio is completely empty.")
+            // Treat as a valid-but-silent recording instead of erroring out — a brand
+            // new sermon job stuck at "Failed" purely because the user tapped stop
+            // too quickly (or the room was silent) is worse UX than an empty result.
+            Log.w(TAG, "Audio decode produced zero samples — returning empty transcript.")
+            return ""
         }
         Log.d(TAG, "Audio successfully decoded. Sample count: ${pcmData.size}")
 

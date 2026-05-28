@@ -1,0 +1,16 @@
+<ko-KR>
+필기 결과 사라짐 현상 긴급 수정 (v1.6.1)
+
+- [핵심 수정] 필기가 완료되었는데 상세 화면에서 본문이 비어 보이던 문제를 해결했습니다. 내부 데이터베이스에서 필기 텍스트가 저장 직후 자동 삭제되던 원인을 잡았습니다. 이제 모든 새 필기 결과가 안정적으로 보존됩니다.
+- [무음/짧은 녹음 안정화] 음성이 거의 없거나 매우 짧은 녹음에서도 오류로 빠지지 않고 "음성에서 인식된 내용이 없습니다" 안내와 함께 완료 상태로 정리됩니다.
+- 안내: 이전 버전에서 본문이 비어 있던 설교 기록은 복구되지 않습니다. 해당 항목은 삭제 후 다시 녹음해 주세요. 이후 만들어지는 필기는 모두 정상 저장됩니다.
+</ko-KR>
+
+<en-US>
+Hotfix: transcript data loss fix (v1.6.1)
+
+- [Critical fix] Resolved an issue where the transcript detail screen appeared empty even though transcription had completed. A foreign key cascade in our local database was wiping the just-written transcript segments immediately after save. All new transcripts now persist correctly.
+- [Silent/very-short recordings] Recordings with no speech or that end within a second no longer fail. They now finish cleanly with a "No speech recognized" placeholder instead of an error badge.
+- Note: sermons created in earlier versions whose transcript appears blank cannot be recovered — delete them and re-record. All transcripts going forward are saved properly.
+</en-US>
+

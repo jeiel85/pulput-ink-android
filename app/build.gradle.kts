@@ -23,8 +23,8 @@ android {
     applicationId = "io.pulpit.ink"
     minSdk = 24
     targetSdk = 36
-    versionCode = 8
-    versionName = "1.6.0"
+    versionCode = 9
+    versionName = "1.6.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

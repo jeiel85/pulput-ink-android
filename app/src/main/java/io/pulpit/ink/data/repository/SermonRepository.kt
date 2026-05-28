@@ -44,7 +44,7 @@ class SermonRepository(private val sermonDao: SermonDao) {
     suspend fun markJobFailed(jobId: String, message: String) {
         withContext(NonCancellable) {
             val job = sermonDao.getJobById(jobId) ?: return@withContext
-            sermonDao.insertJob(job.copy(status = "Failed", errorMessage = message))
+            sermonDao.updateJob(job.copy(status = "Failed", errorMessage = message))
         }
     }
 
@@ -61,7 +61,7 @@ class SermonRepository(private val sermonDao: SermonDao) {
         else
             "Previous transcription was interrupted. Please retry."
         stuck.forEach { job ->
-            sermonDao.insertJob(job.copy(status = "Failed", errorMessage = msg))
+            sermonDao.updateJob(job.copy(status = "Failed", errorMessage = msg))
         }
     }
 
@@ -119,7 +119,7 @@ class SermonRepository(private val sermonDao: SermonDao) {
         }
 
         // All pre-flight checks passed — claim the job.
-        sermonDao.insertJob(job.copy(status = "Transcribing", errorMessage = null))
+        sermonDao.updateJob(job.copy(status = "Transcribing", errorMessage = null))
 
         try {
             TranscriptionNotificationHelper.showProgressNotification(
@@ -164,6 +164,34 @@ class SermonRepository(private val sermonDao: SermonDao) {
             val cleanedTranscript = TranscriptCleaner.clean(rawTranscript)
             val correctedTranscript = OfflineTextProcessor.correctTranscript(cleanedTranscript)
 
+            // Empty-transcript path: Whisper found no speech (silent/very short
+            // recording). Treat as a successful no-op with a placeholder note so the
+            // sermon list shows "Done", not a red "Failed" badge.
+            if (correctedTranscript.isBlank()) {
+                withContext(NonCancellable) {
+                    // IMPORTANT: update the job row via `@Update` (not `@Insert REPLACE`),
+                    // otherwise the row is delete-and-reinserted and the CASCADE foreign
+                    // key on sermon_segments would wipe out the segments we just wrote.
+                    sermonDao.updateJob(
+                        job.copy(
+                            status = "Done",
+                            errorMessage = null,
+                            summary = if (isKo) "음성에서 인식된 내용이 없어 요약을 생성하지 않았습니다." else "No speech was recognized; nothing to summarize.",
+                            outline = null,
+                            bibleRefs = null,
+                            properNouns = null,
+                            keywords = null
+                        )
+                    )
+                    writePlaceholderSegment(jobId, job.durationSec, isKo)
+                }
+                TranscriptionNotificationHelper.showProgressNotification(
+                    context, jobId, title, 100,
+                    if (isKo) "음성 인식 결과 없음" else "No speech detected"
+                )
+                return@withContext true
+            }
+
             val finalTitle = computeOfflineTitle(job.title, correctedTranscript)
             val summary = OfflineTextProcessor.generateSummary(finalTitle, correctedTranscript)
             val refs = OfflineTextProcessor.extractBibleReferences(correctedTranscript)
@@ -173,9 +201,12 @@ class SermonRepository(private val sermonDao: SermonDao) {
 
             // Persist final state under NonCancellable so a late scope cancellation can't
             // leave the job stuck at Transcribing with completed text already in memory.
+            // Order matters: update the parent row FIRST via `@Update`, then write child
+            // segments. `@Insert REPLACE` would delete-and-reinsert the parent, which
+            // CASCADEs to wipe the segments we'd just written (foreign key on
+            // sermon_segments.jobId). Using `@Update` keeps the row's primary key stable.
             withContext(NonCancellable) {
-                writeSegments(jobId, job.durationSec, correctedTranscript)
-                sermonDao.insertJob(
+                sermonDao.updateJob(
                     job.copy(
                         title = finalTitle,
                         status = "Done",
@@ -187,6 +218,7 @@ class SermonRepository(private val sermonDao: SermonDao) {
                         keywords = keywords
                     )
                 )
+                writeSegments(jobId, job.durationSec, correctedTranscript)
             }
 
             TranscriptionNotificationHelper.showProgressNotification(
@@ -215,21 +247,22 @@ class SermonRepository(private val sermonDao: SermonDao) {
         val segments = sermonDao.getSegmentsByJobId(jobId)
         if (segments.isEmpty()) return@withContext false
 
-        sermonDao.insertJob(job.copy(status = "Transcribing"))
+        sermonDao.updateJob(job.copy(status = "Transcribing"))
         try {
             val rawFulltext = segments.joinToString("\n\n") { it.text }
 
             val cleaned = TranscriptCleaner.clean(rawFulltext)
             val corrected = OfflineTextProcessor.correctTranscript(cleaned)
-            writeSegments(jobId, job.durationSec, corrected)
-            
+
             val summary = OfflineTextProcessor.generateSummary(job.title, corrected)
             val refs = OfflineTextProcessor.extractBibleReferences(corrected)
             val outline = OfflineTextProcessor.generateSermonOutline(job.title, corrected, refs)
             val nouns = OfflineTextProcessor.extractProperNouns(corrected)
             val keywords = OfflineTextProcessor.extractKeywords(corrected)
 
-            sermonDao.insertJob(
+            // Update parent row first, then rewrite child segments — see transcribeJob
+            // for the CASCADE/REPLACE rationale.
+            sermonDao.updateJob(
                 job.copy(
                     status = "Done",
                     summary = summary,
@@ -239,9 +272,10 @@ class SermonRepository(private val sermonDao: SermonDao) {
                     keywords = keywords
                 )
             )
+            writeSegments(jobId, job.durationSec, corrected)
             true
         } catch (e: Exception) {
-            sermonDao.insertJob(job.copy(status = "Done", errorMessage = e.localizedMessage))
+            sermonDao.updateJob(job.copy(status = "Done", errorMessage = e.localizedMessage))
             false
         }
     }
@@ -259,7 +293,7 @@ class SermonRepository(private val sermonDao: SermonDao) {
             val refs = OfflineTextProcessor.extractBibleReferences(text)
             val newOutline = OfflineTextProcessor.generateSermonOutline(job.title, text, refs)
             val newSummary = OfflineTextProcessor.generateSummary(job.title, text)
-            sermonDao.insertJob(
+            sermonDao.updateJob(
                 job.copy(
                     outline = newOutline,
                     summary = newSummary,
@@ -298,6 +332,28 @@ class SermonRepository(private val sermonDao: SermonDao) {
         }
         sermonDao.deleteSegmentsByJobId(jobId)
         sermonDao.insertSegments(segments)
+    }
+
+    /**
+     * Write a single placeholder segment for jobs where Whisper recognized no speech.
+     * Without this, the detail screen would say "no transcript records yet" which is
+     * indistinguishable from a job that never ran.
+     */
+    private suspend fun writePlaceholderSegment(jobId: String, totalDurationSec: Double, isKo: Boolean) {
+        val text = if (isKo)
+            "음성에서 인식된 내용이 없습니다. 녹음이 너무 짧거나 무음일 수 있어요."
+        else
+            "No speech was recognized. The recording may be too short or silent."
+        val speakerLabel = if (isKo) "설교자" else "Preacher"
+        val segment = SermonSegment(
+            jobId = jobId,
+            startSec = 0.0,
+            endSec = totalDurationSec.coerceAtLeast(0.0),
+            text = text,
+            speaker = speakerLabel
+        )
+        sermonDao.deleteSegmentsByJobId(jobId)
+        sermonDao.insertSegments(listOf(segment))
     }
 
     private fun computeOfflineTitle(currentTitle: String, transcript: String): String {
