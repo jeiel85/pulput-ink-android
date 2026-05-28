@@ -51,34 +51,32 @@ class WhisperModelManager(private val context: Context) {
 
         try {
             val request = Request.Builder().url(config.downloadUrl).build()
-            val response = client.newCall(request).execute()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Failed to download model: ${response.message}")
+                    return@withContext false
+                }
 
-            if (!response.isSuccessful) {
-                Log.e(TAG, "Failed to download model: ${response.message}")
-                return@withContext false
-            }
+                val body = response.body ?: return@withContext false
+                val contentLength = body.contentLength()
+                body.byteStream().use { inputStream ->
+                    FileOutputStream(tempFile).use { outputStream ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        var totalBytesRead = 0L
 
-            val body = response.body ?: return@withContext false
-            val contentLength = body.contentLength()
-            val inputStream: InputStream = body.byteStream()
-            val outputStream = FileOutputStream(tempFile)
-
-            val buffer = ByteArray(8192)
-            var bytesRead: Int
-            var totalBytesRead = 0L
-
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                outputStream.write(buffer, 0, bytesRead)
-                totalBytesRead += bytesRead
-                if (contentLength > 0) {
-                    val progress = ((totalBytesRead * 100) / contentLength).toInt()
-                    onProgress(progress)
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            outputStream.write(buffer, 0, bytesRead)
+                            totalBytesRead += bytesRead
+                            if (contentLength > 0) {
+                                val progress = ((totalBytesRead * 100) / contentLength).toInt()
+                                onProgress(progress)
+                            }
+                        }
+                        outputStream.flush()
+                    }
                 }
             }
-
-            outputStream.flush()
-            outputStream.close()
-            inputStream.close()
 
             // Rename temp file to final file safely
             if (tempFile.exists()) {

@@ -1,0 +1,60 @@
+# Pulpit Ink - 새 버전 출시 및 배포 자동화 가이드 (v1.5.0)
+
+이 가이드는 Pulpit Ink 안드로이드 앱의 새로운 버전 출시 준비를 마치고 배포용 서명 AAB 번들 및 로컬라이징 출시 노트를 원클릭으로 Windows 바탕화면에 추출해내는 절차를 정리합니다.
+
+---
+
+## 1. 출시 준비 메타데이터 구조
+
+Pulpit Ink의 메타데이터 및 릴리즈 체크 리스트는 다음 디렉터리에 집중되어 있습니다:
+- **버전 번호**: [app/build.gradle.kts](file:///d:/Project/pulpit-ink-android/app/build.gradle.kts) (`versionName` 및 `versionCode`)
+- **출시 노트**: [play-console/release-notes/](file:///d:/Project/pulpit-ink-android/play-console/release-notes/)
+  - `1.5.0-ko-KR.txt`: 한국어 스토어용 업데이트 요약 정보
+  - `1.5.0-en-US.txt`: 영어 스토어용 업데이트 요약 정보
+
+---
+
+## 2. 바탕화면 배포 자동화 스크립트 실행
+
+새 릴리즈 빌드(AAB)를 생성하고 릴리즈 노트를 Windows 바탕화면으로 즉각 DUMP 복사하기 위해, 루트 디렉터리에 배포 전용 파워쉘 스크립트가 준비되어 있습니다:
+- **스크립트 경로**: [scripts/export_play_console_assets.ps1](file:///d:/Project/pulpit-ink-android/scripts/export_play_console_assets.ps1)
+
+### 실행 방법
+
+1. **PowerShell** 또는 **Android Studio Terminal**을 엽니다.
+2. 프로젝트 루트 디렉터리(`d:\Project\pulpit-ink-android`)로 이동합니다.
+3. 다음 명령어를 실행하여 원클릭 빌드 및 바탕화면 추출을 수행합니다:
+
+```powershell
+# 빌드와 바탕화면 복사를 원클릭으로 수행 (자동 서명 적용)
+.\scripts\export_play_console_assets.ps1
+```
+
+> [!TIP]
+> 만약 수동으로 이미 빌드를 완료한 상태여서 **복사 작업만 빠르게 수행**하고 싶다면, `-SkipBuild` 플래그를 추가하면 빌드 단계를 건너뛰고 1초만에 바탕화면으로 파일만 추출합니다:
+> ```powershell
+> .\scripts\export_play_console_assets.ps1 -SkipBuild
+> ```
+
+---
+
+## 3. 추출 완료 아티팩트 검증
+
+스크립트가 성공적으로 종료되면, Windows **바탕화면(Desktop)** 에 다음과 같은 3개의 릴리즈 자산 파일이 자동으로 안전 생성됩니다:
+
+1. `PulpitInk-v1.5.0-vc7.aab`
+   - Play Store에 즉시 업로드 가능한 프로덕션 서명 릴리즈 번들입니다.
+2. `PulpitInk-v1.5.0-vc7-release-notes-ko.txt`
+   - 한국어 버전 Play Store 업데이트 상세 텍스트입니다.
+3. `PulpitInk-v1.5.0-vc7-release-notes-en.txt`
+   - 영어 버전 Play Store 업데이트 상세 텍스트입니다.
+
+---
+
+## 4. Play Console 출시 업로드 절차
+
+1. **Google Play Console** 로그인 -> Pulpit Ink 앱 선택
+2. **출시** -> **프로덕션** 진입 -> **새 출시 만들기** 클릭
+3. 바탕화면에 복사된 `PulpitInk-v1.5.0-vc7.aab` 파일을 드래그 앤 드롭하여 업로드합니다.
+4. **출시 노트** 입력창에 바탕화면의 `release-notes-ko.txt` 내용(한국어 로케일) 및 `release-notes-en.txt` 내용(영어 로케일)을 복사해서 붙여넣습니다.
+5. **출시 검토 및 시작**을 누르면 정식 배포 준비가 완벽히 완료됩니다.

@@ -38,12 +38,13 @@
     <string name="rec_saved">Recording saved. Starting transcription...</string>
     <string name="rec_complete">Transcription Complete!</string>
     <string name="rec_removed">Sermon removed from records.</string>
-    <string name="toast_proofreading">AI is proofreading references and formatting nouns...</string>
-    <string name="toast_proofread_success">References successfully formatted!</string>
-    <string name="toast_proofread_failed">Proofreading failed. Verify API configuration and connection.</string>
+    <string name="transcription_failed">Transcription failed. Please check your local model or storage space.</string>
+    <string name="toast_proofreading">Cleaning up the transcript…</string>
+    <string name="toast_proofread_success">Transcript cleanup complete.</string>
+    <string name="toast_proofread_failed">Cleanup failed. Please try again.</string>
     <string name="toast_outline_compiling">Re-compiling markdown outlines...</string>
     <string name="toast_outline_success">Outline successfully compiled!</string>
-    <string name="toast_outline_failed">Compilation failed. Check your OpenAI API key and connection.</string>
+    <string name="toast_outline_failed">Outline generation failed. Please try again.</string>
 
     <!-- Detail Screen -->
     <string name="tab_brief">Brief &amp; Player</string>
@@ -87,7 +88,7 @@
     <string name="copied_toast">%1$s copied to clipboard!</string>
 
     <!-- Whisper Manager -->
-    <string name="whisper_manager_title">OpenAI Whisper Model Desk</string>
+    <string name="whisper_manager_title">Whisper AI Model Settings</string>
     <string name="storage_used">Local storage occupied:</string>
     <string name="model_tiny_title">Whisper Tiny (Lightweight)</string>
     <string name="model_tiny_desc">Very Fast, Low accuracy. Recommended for low-spec devices or quick checks.</string>
@@ -102,7 +103,8 @@
     <string name="delete_button">Delete Model</string>
     <string name="selected_label">Active</string>
     <string name="select_label">Select</string>
-    <string name="whisper_info">Select your local speech-to-text model. Cloud API requires OPENAI_API_KEY, while local mode runs directly offline using loaded ggml .bin models.</string>
+    <string name="whisper_info">Download a model once, then every recording is transcribed, summarized, and outlined entirely on your device — no internet required.</string>
+    <string name="whisper_info_aikey">All AI features run fully offline on your device.</string>
     <string name="toast_download_start">Downloading Whisper %1$s model...</string>
     <string name="toast_download_success">Whisper %1$s model successfully downloaded!</string>
     <string name="toast_download_failed">Failed to download model. Check network settings.</string>

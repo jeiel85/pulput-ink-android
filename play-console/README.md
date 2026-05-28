@@ -8,8 +8,8 @@
 |---|---|
 | Application ID | `io.pulpit.ink` |
 | 앱 이름 | Pulpit Ink |
-| Version Code | 2 |
-| Version Name | 1.1.0 |
+| Version Code | 6 |
+| Version Name | 1.4.0 |
 | Min SDK | 24 (Android 7.0) |
 | Target SDK | 36 |
 | 권한 | `INTERNET`, `RECORD_AUDIO` |

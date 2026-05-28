@@ -1,1 +1,5 @@
 /build
+# Vendored upstream whisper.cpp source — fetched at setup, not tracked in this repo
+/src/main/cpp/whisper.cpp/
+# Generated Android native build outputs
+/.cxx/

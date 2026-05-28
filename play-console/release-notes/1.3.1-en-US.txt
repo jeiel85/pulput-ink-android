@@ -1,0 +1,5 @@
+[Pulpit Ink 1.3.1 — True Offline Completion + Optional AI Features Notice]
+
+• Decoupled post-processing so a transcription finishes with "Done" status even without an OpenAI key (no more misleading "Failed" badge for offline-only users)
+• Added a two-line notice in Settings — offline mode works with just the model download; adding OPENAI_API_KEY additionally enables automatic summary, sermon outline, scripture extraction, keywords, and one-tap proofreading
+• Continues to ship the on-device Whisper engine (libwhisper.so) introduced in 1.3.0

@@ -23,10 +23,29 @@ android {
     applicationId = "io.pulpit.ink"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.2.0"
+    versionCode = 7
+    versionName = "1.5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    ndk {
+      // Modern Android devices only. armeabi-v7a still covered for legacy phones.
+      abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+    }
+
+    externalNativeBuild {
+      cmake {
+        cppFlags += "-std=c++17"
+        arguments += listOf("-DANDROID_STL=c++_shared")
+      }
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path = file("src/main/cpp/CMakeLists.txt")
+      version = "3.22.1"
+    }
   }
 
   signingConfigs {

@@ -1,0 +1,8 @@
+[Pulpit Ink 1.4.0 — On-device Transcript Cleanup Pass]
+
+• Added an on-device deterministic post-processor (TranscriptCleaner) that runs after every Whisper inference
+  - Removes Whisper's repeated-phrase hallucinations ("thank you thank you thank you …") across 1- to 6-token windows
+  - Normalizes paragraph gaps, per-line leading whitespace, and intraline whitespace runs
+• The Auto-correct button now works without an OpenAI API key — with a key, GPT-based proofreading runs; without one, the deterministic cleanup takes over automatically
+• Every cleanup pass runs fully on-device — no internet, no API key (true offline)
+• Cleaned up the corresponding toast messages so they read naturally in both modes

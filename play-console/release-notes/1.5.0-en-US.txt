@@ -1,0 +1,7 @@
+<en-US>
+Fully Offline AI Assistant & UX Redesign! (v1.5.0)
+
+1. [Offline NLP Engine] All network-dependent features (OpenAI/Gemini) have been replaced with a 100% on-device, fully offline Natural Language Processor. Auto-proofread typos, canonicalize Bible references, and compile beautiful sermon outlines without internet or API keys.
+2. [Recording Guard Dialog] Prevents accidental stops during recording by displaying a clear verification dialog before terminating and saving.
+3. [Auto-Navigation & Tab Focus] Transitions directly to the Detail Screen upon save, and defaults to the 'Transcript' tab instantly when the job is Done. No more confusion on where transcripts are stored.
+</en-US>

@@ -1,7 +1,10 @@
 package io.pulpit.ink.data.repository
 
 import android.content.Context
-import io.pulpit.ink.data.api.OpenAIService
+import io.pulpit.ink.data.api.SpeechToTextEngineFactory
+import io.pulpit.ink.data.text.OfflineTextProcessor
+import io.pulpit.ink.data.text.TranscriptionNotificationHelper
+import io.pulpit.ink.data.text.TranscriptCleaner
 import io.pulpit.ink.data.db.SermonDao
 import io.pulpit.ink.data.model.SermonJob
 import io.pulpit.ink.data.model.SermonSegment
@@ -44,37 +47,75 @@ class SermonRepository(private val sermonDao: SermonDao) {
     }
 
     /**
-     * Transcribe audio with Whisper, then post-process with GPT (summary / outline /
-     * scripture / proper nouns / keywords / title). Fails fast and surfaces a real error
-     * via job.status="Failed" when the API key is missing or any step throws.
+     * Transcribe audio with Whisper, then post-process entirely offline
+     * (summary / outline / scripture / proper nouns / keywords / title).
+     * No API key or internet required.
      */
-    @Suppress("UNUSED_PARAMETER")
     suspend fun transcribeJob(
         context: Context,
         jobId: String,
         topicHint: String? = null,
         selectedModelKey: String = "base"
-    ) = withContext(Dispatchers.IO) {
-        val job = sermonDao.getJobById(jobId) ?: return@withContext
+    ): Boolean = withContext(Dispatchers.IO) {
+        val job = sermonDao.getJobById(jobId) ?: return@withContext false
         sermonDao.insertJob(job.copy(status = "Transcribing"))
 
+        val isKo = java.util.Locale.getDefault().language == "ko"
+        val title = job.title
+
         try {
+            // Update 1: Init / Start
+            TranscriptionNotificationHelper.showProgressNotification(
+                context, jobId, title, 10, 
+                if (isKo) "대기 중..." else "Waiting..."
+            )
+
             val audioFile = File(job.audioPath)
             if (!audioFile.exists() || audioFile.length() == 0L) {
                 sermonDao.insertJob(job.copy(
                     status = "Failed",
                     errorMessage = "Audio file missing or empty: ${job.audioPath}"
                 ))
-                return@withContext
+                TranscriptionNotificationHelper.dismissNotification(context, jobId)
+                return@withContext false
             }
 
-            val rawTranscript = OpenAIService.transcribeAudio(audioFile)
-            writeSegments(jobId, job.durationSec, rawTranscript)
+            // Update 2: Audio Decoding Stage
+            TranscriptionNotificationHelper.showProgressNotification(
+                context, jobId, title, 20, 
+                if (isKo) "오디오 디코딩 중..." else "Decoding audio..."
+            )
 
-            val finalTitle = computeFinalTitle(job.title, rawTranscript)
+            // Resolve optimal STT engine dynamically using Factory
+            val engine = SpeechToTextEngineFactory.getEngine(context, selectedModelKey)
+            
+            // Update 3: AI Inference Stage
+            TranscriptionNotificationHelper.showProgressNotification(
+                context, jobId, title, 40, 
+                if (isKo) "Whisper AI 분석 중..." else "Running Whisper AI inference..."
+            )
+            val rawTranscript = engine.transcribe(audioFile, selectedModelKey)
 
-            // Post-processing in parallel
-            val (summary, outline, refs, nouns, keywords) = runPostProcessing(rawTranscript, topicHint)
+            // Update 4: NLP Cleanup Stage
+            TranscriptionNotificationHelper.showProgressNotification(
+                context, jobId, title, 75, 
+                if (isKo) "맞춤법 교정 및 요약/아웃라인 가공 중..." else "Proofreading & structuring outline..."
+            )
+
+            // Local deterministic cleanup (whitespace + Whisper repeat-loop dedup).
+            val cleanedTranscript = TranscriptCleaner.clean(rawTranscript)
+            
+            // Fully Offline High-quality grammar and spacing correction
+            val correctedTranscript = OfflineTextProcessor.correctTranscript(cleanedTranscript)
+            writeSegments(jobId, job.durationSec, correctedTranscript)
+
+            // Fully Offline post-processing
+            val finalTitle = computeOfflineTitle(job.title, correctedTranscript)
+            val summary = OfflineTextProcessor.generateSummary(finalTitle, correctedTranscript)
+            val refs = OfflineTextProcessor.extractBibleReferences(correctedTranscript)
+            val outline = OfflineTextProcessor.generateSermonOutline(finalTitle, correctedTranscript, refs)
+            val nouns = OfflineTextProcessor.extractProperNouns(correctedTranscript)
+            val keywords = OfflineTextProcessor.extractKeywords(correctedTranscript)
 
             sermonDao.insertJob(
                 job.copy(
@@ -87,6 +128,13 @@ class SermonRepository(private val sermonDao: SermonDao) {
                     keywords = keywords
                 )
             )
+
+            // Update 5: Completed 100%
+            TranscriptionNotificationHelper.showProgressNotification(
+                context, jobId, finalTitle, 100, 
+                if (isKo) "가공 완료!" else "Transcription successful!"
+            )
+            return@withContext true
         } catch (e: Exception) {
             sermonDao.insertJob(
                 job.copy(
@@ -94,25 +142,37 @@ class SermonRepository(private val sermonDao: SermonDao) {
                     errorMessage = e.localizedMessage ?: "Transcription failed"
                 )
             )
+            // Error Notification State
+            TranscriptionNotificationHelper.showProgressNotification(
+                context, jobId, title, 100, 
+                if (isKo) "전사 분석 실패" else "Transcription failed"
+            )
+            return@withContext false
         }
     }
 
     /**
-     * Re-run GPT correction on the existing transcript segments and refresh derived
-     * metadata. No-op (returns false) if no segments exist or the API key is missing.
+     * Re-run correction on the existing transcript segments entirely offline.
      */
     suspend fun runAutoCorrect(jobId: String): Boolean = withContext(Dispatchers.IO) {
         val job = sermonDao.getJobById(jobId) ?: return@withContext false
         val segments = sermonDao.getSegmentsByJobId(jobId)
-        if (segments.isEmpty() || !OpenAIService.isApiKeyAvailable()) return@withContext false
+        if (segments.isEmpty()) return@withContext false
 
         sermonDao.insertJob(job.copy(status = "Transcribing"))
         try {
             val rawFulltext = segments.joinToString("\n\n") { it.text }
-            val corrected = OpenAIService.correctTranscript(rawFulltext)
-            writeSegments(jobId, job.durationSec, corrected)
 
-            val (summary, outline, refs, nouns, keywords) = runPostProcessing(corrected, topicHint = null)
+            val cleaned = TranscriptCleaner.clean(rawFulltext)
+            val corrected = OfflineTextProcessor.correctTranscript(cleaned)
+            writeSegments(jobId, job.durationSec, corrected)
+            
+            val summary = OfflineTextProcessor.generateSummary(job.title, corrected)
+            val refs = OfflineTextProcessor.extractBibleReferences(corrected)
+            val outline = OfflineTextProcessor.generateSermonOutline(job.title, corrected, refs)
+            val nouns = OfflineTextProcessor.extractProperNouns(corrected)
+            val keywords = OfflineTextProcessor.extractKeywords(corrected)
+
             sermonDao.insertJob(
                 job.copy(
                     status = "Done",
@@ -131,18 +191,25 @@ class SermonRepository(private val sermonDao: SermonDao) {
     }
 
     /**
-     * Regenerate just the outline + summary from existing segments.
+     * Regenerate outline + summary from existing segments entirely offline.
      */
     suspend fun regenerateOutline(jobId: String): Boolean = withContext(Dispatchers.IO) {
         val job = sermonDao.getJobById(jobId) ?: return@withContext false
         val segments = sermonDao.getSegmentsByJobId(jobId)
-        if (segments.isEmpty() || !OpenAIService.isApiKeyAvailable()) return@withContext false
+        if (segments.isEmpty()) return@withContext false
 
         try {
             val text = segments.joinToString("\n\n") { it.text }
-            val newOutline = OpenAIService.generateSermonOutline(text)
-            val newSummary = OpenAIService.generateSummary(text)
-            sermonDao.insertJob(job.copy(outline = newOutline, summary = newSummary))
+            val refs = OfflineTextProcessor.extractBibleReferences(text)
+            val newOutline = OfflineTextProcessor.generateSermonOutline(job.title, text, refs)
+            val newSummary = OfflineTextProcessor.generateSummary(job.title, text)
+            sermonDao.insertJob(
+                job.copy(
+                    outline = newOutline,
+                    summary = newSummary,
+                    bibleRefs = refs
+                )
+            )
             true
         } catch (e: Exception) {
             false
@@ -150,29 +217,6 @@ class SermonRepository(private val sermonDao: SermonDao) {
     }
 
     /* ---------------------- helpers ---------------------- */
-
-    private data class Derived(
-        val summary: String,
-        val outline: String,
-        val refs: String,
-        val nouns: String,
-        val keywords: String
-    )
-
-    private suspend fun runPostProcessing(transcript: String, topicHint: String?): Derived = coroutineScope {
-        val summaryD = async { OpenAIService.generateSummary(transcript) }
-        val outlineD = async { OpenAIService.generateSermonOutline(transcript) }
-        val refsD = async { OpenAIService.extractBibleReferences(transcript) }
-        val nounsD = async { OpenAIService.extractProperNouns(transcript) }
-        val keywordsD = async { OpenAIService.extractKeywords(transcript) }
-        Derived(
-            summary = summaryD.await(),
-            outline = outlineD.await(),
-            refs = refsD.await(),
-            nouns = nounsD.await(),
-            keywords = keywordsD.await()
-        )
-    }
 
     private suspend fun writeSegments(jobId: String, totalDurationSec: Double, transcript: String) {
         val paragraphs = transcript
@@ -200,19 +244,11 @@ class SermonRepository(private val sermonDao: SermonDao) {
         sermonDao.insertSegments(segments)
     }
 
-    private suspend fun computeFinalTitle(currentTitle: String, transcript: String): String {
+    private fun computeOfflineTitle(currentTitle: String, transcript: String): String {
         val placeholderTitles = setOf("Untitled Sermon", "무제 설교", "")
         val needsAutoTitle = currentTitle.trim() in placeholderTitles ||
             currentTitle.startsWith("Sermon_Rec_")
-        if (!needsAutoTitle) return currentTitle
-
-        return try {
-            OpenAIService.generateTitle(transcript).ifBlank {
-                fallbackTitleFromTranscript(transcript)
-            }
-        } catch (_: Exception) {
-            fallbackTitleFromTranscript(transcript)
-        }
+        return if (needsAutoTitle) fallbackTitleFromTranscript(transcript) else currentTitle
     }
 
     private fun fallbackTitleFromTranscript(transcript: String): String {

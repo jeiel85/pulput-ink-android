@@ -1,0 +1,6 @@
+[Pulpit Ink 1.3.0 — Fully Offline On-Device Transcription Engine]
+
+• Bundled the Whisper.cpp on-device inference engine (libwhisper.so) — transcribe sermons with zero internet
+• No API key, no subscription, no data cost; audio never leaves the device (true privacy)
+• Download Whisper Tiny / Base / Small once from Settings and every subsequent recording runs fully offline automatically
+• Native support for arm64-v8a, armeabi-v7a and x86_64 ABIs, including older devices

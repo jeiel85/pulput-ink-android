@@ -66,13 +66,8 @@ class SermonViewModel(
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Recording States
-    private val _isRecording = MutableStateFlow(false)
-    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
-
-    private val _recordingDurationSec = MutableStateFlow(0.0)
-    val recordingDurationSec: StateFlow<Double> = _recordingDurationSec.asStateFlow()
-
-    private var recordingTimerJob: Job? = null
+    val isRecording: StateFlow<Boolean> = io.pulpit.ink.ui.audio.AudioRecordingService.isRecording
+    val recordingDurationSec: StateFlow<Double> = io.pulpit.ink.ui.audio.AudioRecordingService.durationSec
 
     // Audio Playback States
     private val _playbackProgress = MutableStateFlow(0)
@@ -88,6 +83,10 @@ class SermonViewModel(
     private val _uiEvents = MutableSharedFlow<String>()
     val uiEvents: SharedFlow<String> = _uiEvents.asSharedFlow()
 
+    // Dispatch newly recorded sermon IDs to auto-transition into Detail Screen
+    private val _newJobFlow = MutableSharedFlow<String>()
+    val newJobFlow: SharedFlow<String> = _newJobFlow.asSharedFlow()
+
     // Whisper Model State Flows
     val selectedWhisperModel = MutableStateFlow(context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE).getString("selected_model", "base") ?: "base")
     
@@ -102,6 +101,11 @@ class SermonViewModel(
 
     init {
         refreshWhisperStates()
+        viewModelScope.launch {
+            io.pulpit.ink.ui.audio.AudioRecordingService.newJobIdFlow.collect { jobId ->
+                _newJobFlow.emit(jobId)
+            }
+        }
     }
 
     private fun isKoreanLanguage(): Boolean {
@@ -177,75 +181,32 @@ class SermonViewModel(
        AUDIO RECORDING LOGIC
        ========================================================================= */
 
-    fun startRecording() {
-        if (_isRecording.value) return
-        
-        val recordTitle = "Sermon_Rec_${System.currentTimeMillis()}"
-        val recordFile = audioEngine.startRecording(recordTitle)
-        
-        if (recordFile != null) {
-            _isRecording.value = true
-            _recordingDurationSec.value = 0.0
-
-            // Ticker to update recorder clock
-            recordingTimerJob = viewModelScope.launch {
-                while (isActive) {
-                    delay(1000)
-                    _recordingDurationSec.value += 1.0
-                }
-            }
-        } else {
-            postUiEvent(context.getString(R.string.mic_error))
+    fun startRecording(title: String = "", topic: String = "") {
+        if (isRecording.value) return
+        val intent = android.content.Intent(context, io.pulpit.ink.ui.audio.AudioRecordingService::class.java).apply {
+            action = io.pulpit.ink.ui.audio.AudioRecordingService.ACTION_START
+            putExtra(io.pulpit.ink.ui.audio.AudioRecordingService.EXTRA_TITLE, title)
+            putExtra(io.pulpit.ink.ui.audio.AudioRecordingService.EXTRA_TOPIC, topic)
         }
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
     }
 
     fun stopRecordingAndSave(title: String, sermonTheme: String? = null) {
-        if (!_isRecording.value) return
-
-        recordingTimerJob?.cancel()
-        recordingTimerJob = null
-
-        val duration = audioEngine.stopRecording()
-        _isRecording.value = false
-
-        // Construct target filename in internal storage directory
-        val isKo = isKoreanLanguage()
-        val recordTitle = if (title.isBlank()) {
-            if (isKo) "무제 설교" else "Untitled Sermon"
-        } else {
-            title.trim()
+        if (!isRecording.value) return
+        val intent = android.content.Intent(context, io.pulpit.ink.ui.audio.AudioRecordingService::class.java).apply {
+            action = io.pulpit.ink.ui.audio.AudioRecordingService.ACTION_STOP
+            putExtra(io.pulpit.ink.ui.audio.AudioRecordingService.EXTRA_TITLE, title)
+            putExtra(io.pulpit.ink.ui.audio.AudioRecordingService.EXTRA_TOPIC, sermonTheme ?: "")
         }
-        val tempFile = File(context.cacheDir, "Sermon_Rec_${_recordingDurationSec.value}.m4a") // approximated path matching output
-        
-        viewModelScope.launch {
-            // Find captured file from cache and register job
-            val cacheFiles = context.cacheDir.listFiles()
-            val capturedFile = cacheFiles?.sortedByDescending { it.lastModified() }
-                ?.firstOrNull { it.name.endsWith(".m4a") }
-                ?: tempFile
-
-            val jobId = repository.createNewJob(
-                title = recordTitle,
-                audioPath = capturedFile.absolutePath,
-                durationSec = if (_recordingDurationSec.value > 0) _recordingDurationSec.value else duration
-            )
-
-            postUiEvent(context.getString(R.string.rec_saved))
-            
-            // Queue automatic transcription process asynchronously!
-            launch {
-                repository.transcribeJob(context, jobId, sermonTheme, selectedWhisperModel.value)
-                postUiEvent(context.getString(R.string.rec_complete))
-            }
-        }
+        context.startService(intent)
     }
 
     fun cancelRecording() {
-        if (!_isRecording.value) return
-        recordingTimerJob?.cancel()
-        recordingTimerJob = null
-        audioEngine.stopRecording()
-        _isRecording.value = false
+        if (!isRecording.value) return
+        val intent = android.content.Intent(context, io.pulpit.ink.ui.audio.AudioRecordingService::class.java).apply {
+            action = io.pulpit.ink.ui.audio.AudioRecordingService.ACTION_CANCEL
+        }
+        context.startService(intent)
     }
 
     /* =========================================================================
@@ -255,8 +216,12 @@ class SermonViewModel(
     fun triggerTranscription(jobId: String, themeHint: String? = null) {
         viewModelScope.launch {
             postUiEvent(context.getString(R.string.status_transcribing))
-            repository.transcribeJob(context, jobId, themeHint, selectedWhisperModel.value)
-            postUiEvent(context.getString(R.string.rec_complete))
+            val success = repository.transcribeJob(context, jobId, themeHint, selectedWhisperModel.value)
+            if (success) {
+                postUiEvent(context.getString(R.string.rec_complete))
+            } else {
+                postUiEvent(context.getString(R.string.transcription_failed))
+            }
         }
     }
 
@@ -357,7 +322,6 @@ class SermonViewModel(
     override fun onCleared() {
         super.onCleared()
         audioEngine.stopPlayback()
-        audioEngine.stopRecording()
     }
 }
 

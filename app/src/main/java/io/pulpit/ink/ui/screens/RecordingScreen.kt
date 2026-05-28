@@ -36,6 +36,7 @@ fun RecordingScreen(
 
     var sermonTitle by remember { mutableStateOf("") }
     var sermonFocusTopic by remember { mutableStateOf("") }
+    var showTranscribeConfirmDialog by remember { mutableStateOf(false) }
 
     // Elegant Dark Theme Palette
     val deepInk = Color(0xFFE6E1E5)
@@ -233,7 +234,7 @@ fun RecordingScreen(
                                 .size(92.dp)
                                 .clip(CircleShape)
                                 .background(primaryEmerald.copy(alpha = 0.15f))
-                                .clickable { viewModel.startRecording() }
+                                .clickable { viewModel.startRecording(sermonTitle, sermonFocusTopic) }
                                 .testTag("mic_trigger_button"),
                             contentAlignment = Alignment.Center
                         ) {
@@ -329,8 +330,7 @@ fun RecordingScreen(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 FloatingActionButton(
                                     onClick = {
-                                        viewModel.stopRecordingAndSave(sermonTitle, sermonFocusTopic)
-                                        onNavigateBack()
+                                        showTranscribeConfirmDialog = true
                                     },
                                     containerColor = primaryEmerald,
                                     contentColor = Color(0xFF381E72),
@@ -354,6 +354,54 @@ fun RecordingScreen(
                 }
             }
         }
+    }
+
+    if (showTranscribeConfirmDialog) {
+        val isKo = java.util.Locale.getDefault().language == "ko"
+        AlertDialog(
+            onDismissRequest = { showTranscribeConfirmDialog = false },
+            title = {
+                Text(
+                    text = if (isKo) "녹음 완료 및 전사 시작" else "Complete & Transcribe",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = if (isKo) {
+                        "동시에 진행할 수 없으므로 현재 녹음을 완료하고 전사를 시작하시겠습니까?"
+                    } else {
+                        "Do you want to stop the recording and start transcribing now? Recording and transcription cannot run simultaneously."
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showTranscribeConfirmDialog = false
+                        viewModel.stopRecordingAndSave(sermonTitle, sermonFocusTopic)
+                        onNavigateBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryEmerald)
+                ) {
+                    Text(
+                        text = if (isKo) "종료 후 전사" else "Stop & Transcribe",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFF381E72)
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTranscribeConfirmDialog = false }) {
+                    Text(
+                        text = if (isKo) "취소" else "Cancel",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        )
     }
 }
 

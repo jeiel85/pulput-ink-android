@@ -2,6 +2,7 @@ package io.pulpit.ink
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -60,11 +61,14 @@ fun MainAppHost(viewModel: SermonViewModel) {
     val navController = rememberNavController()
     val context = LocalContext.current
 
-    // Request active audio capture permissions dynamically on entry
-    val audioPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (!isGranted) {
+    // Request active audio capture & notification permissions dynamically on entry
+    val permissionsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissionMap ->
+        val recordGranted = permissionMap[Manifest.permission.RECORD_AUDIO] ?: false
+        if (recordGranted) {
+            navController.navigate("record")
+        } else {
             Toast.makeText(
                 context,
                 "Microphone recording permission is required to capture sermons locally.",
@@ -77,6 +81,15 @@ fun MainAppHost(viewModel: SermonViewModel) {
     LaunchedEffect(Unit) {
         viewModel.uiEvents.collect { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Auto-transition to DetailScreen upon successful sermon recording completion
+    LaunchedEffect(Unit) {
+        viewModel.newJobFlow.collect { jobId ->
+            navController.navigate("detail/$jobId") {
+                popUpTo("home")
+            }
         }
     }
 
@@ -94,16 +107,28 @@ fun MainAppHost(viewModel: SermonViewModel) {
                         navController.navigate("detail/$jobId")
                     },
                     onNavigateToRecord = {
-                        // Check microphone recording permissions before entering capturing studio
                         val hasMic = ContextCompat.checkSelfPermission(
                             context,
                             Manifest.permission.RECORD_AUDIO
                         ) == PackageManager.PERMISSION_GRANTED
 
-                        if (hasMic) {
+                        val hasNotification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                        } else {
+                            true
+                        }
+
+                        if (hasMic && hasNotification) {
                             navController.navigate("record")
                         } else {
-                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                            permissionsLauncher.launch(permissions.toTypedArray())
                         }
                     }
                 )

@@ -55,6 +55,15 @@ fun DetailScreen(
     val playbackDuration by viewModel.playbackDuration.collectAsState()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+
+    // Automatically shift to Transcript tab once the sermon transcription completes successfully
+    LaunchedEffect(activeJob) {
+        val job = activeJob
+        if (job != null && job.status == "Done" && selectedTabIndex == 0) {
+            selectedTabIndex = 1
+        }
+    }
+
     val tabTitles = listOf(
         stringResource(R.string.tab_brief),
         stringResource(R.string.tab_transcript),
@@ -393,6 +402,35 @@ fun BriefingPlayerTab(
                     color = Color(0xFFCAC4D0),
                     lineHeight = 22.sp
                 )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = Color(0xFF49454F).copy(alpha = 0.4f))
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                val isKo = java.util.Locale.getDefault().language == "ko"
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF211F24))
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        tint = emerald,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isKo) "상단의 \'전사본\' 탭에서 전체 텍스트 확인 및 편집이 가능합니다." 
+                               else "View and edit full text in the \'Transcript Editor\' tab above.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = emerald,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

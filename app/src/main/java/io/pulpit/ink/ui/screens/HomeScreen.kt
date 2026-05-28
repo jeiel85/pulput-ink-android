@@ -349,9 +349,9 @@ fun HomeScreen(
 
                     // Model list selection
                     WhisperModelConfig.values().forEach { config ->
-                        val isSelected = selectedModel == config.modelKey
                         val state = downloadStates[config.modelKey] ?: "not_downloaded"
                         val progress = downloadProgresses[config.modelKey] ?: 0
+                        val isSelected = selectedModel == config.modelKey && state == "downloaded"
 
                         Card(
                             colors = CardDefaults.cardColors(
@@ -513,22 +513,22 @@ fun HomeScreen(
 
                     HorizontalDivider(color = Color(0xFF49454F).copy(alpha = 0.4f))
 
-                    // Global guide message
+                    // Offline guarantee message
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.Top
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Info,
+                            imageVector = Icons.Outlined.Lock,
                             contentDescription = null,
-                            tint = softSlate,
+                            tint = primaryEmerald,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(R.string.whisper_info),
                             style = MaterialTheme.typography.bodySmall,
-                            color = softSlate,
+                            color = deepInk,
                             lineHeight = 16.sp
                         )
                     }

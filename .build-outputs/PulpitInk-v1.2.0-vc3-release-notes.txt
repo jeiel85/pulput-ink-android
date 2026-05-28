@@ -1,0 +1,14 @@
+<ko-KR>
+[Pulpit Ink 1.2.0 — 브랜드 아이덴티티 및 앱 아이콘 업데이트]
+
+• 앱 고유의 프리미엄 브랜드 아이덴티티 전면 적용 및 새로운 앱 아이콘 교체
+• 최신 안드로이드 기기를 위한 무손실 WebP 고화질 어댑티브 아이콘 및 해상도별 아이콘 반영
+• 플레이 스토어 업로드 및 배포용 신규 그래픽 이미지 자산 일체 준비
+</ko-KR>
+<en-US>
+[Pulpit Ink 1.2.0 — Brand Identity & App Icon Update]
+
+• Replaced the default launcher icon with the premium custom Pulpit Ink brand icon
+• Added modern lossless WebP adaptive foreground/background and multi-density legacy icons
+• Fully updated Google Play Store graphic and promotional assets
+</en-US>

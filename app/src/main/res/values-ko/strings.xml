@@ -38,12 +38,13 @@
     <string name="rec_saved">녹음이 저장되었습니다. 필기를 시작합니다...</string>
     <string name="rec_complete">설교 필기 및 동기화가 완료되었습니다!</string>
     <string name="rec_removed">설교 기록이 보관함에서 제거되었습니다.</string>
-    <string name="toast_proofreading">AI가 오탈자를 보정하고 성경 레퍼런스를 정리하고 있습니다...</string>
-    <string name="toast_proofread_success">성경 구절 및 고유명사 교정이 완료되었습니다!</string>
-    <string name="toast_proofread_failed">교정에 실패했습니다. API 설정과 네트워크 연결을 확인하세요.</string>
+    <string name="transcription_failed">전사 처리에 실패했습니다. 로컬 모델 또는 기기 용량을 확인해주세요.</string>
+    <string name="toast_proofreading">전사문을 정리하고 있습니다…</string>
+    <string name="toast_proofread_success">전사문 정리가 완료되었습니다.</string>
+    <string name="toast_proofread_failed">정리에 실패했습니다. 다시 시도해 주세요.</string>
     <string name="toast_outline_compiling">마크다운 개요서를 컴파일하는 중입니다...</string>
     <string name="toast_outline_success">설교 개요서 컴파일을 완료했습니다!</string>
-    <string name="toast_outline_failed">개요 생성에 실패했습니다. OpenAI API 키와 네트워크 연결을 확인하세요.</string>
+    <string name="toast_outline_failed">개요 생성에 실패했습니다. 다시 시도해 주세요.</string>
 
     <!-- Detail Screen -->
     <string name="tab_brief">요약 및 플레이어</string>
@@ -87,7 +88,7 @@
     <string name="copied_toast">%1$s 클립보드에 복사되었습니다!</string>
 
     <!-- Whisper Manager -->
-    <string name="whisper_manager_title">OpenAI Whisper 모델 설정 데스크</string>
+    <string name="whisper_manager_title">Whisper AI 모델 설정</string>
     <string name="storage_used">로컬 저장소 사용량:</string>
     <string name="model_tiny_title">Whisper Tiny (초경량 모델)</string>
     <string name="model_tiny_desc">가장 빠름, 비교적 낮은 정확도. 저장 공간이 부족하거나 사양이 낮은 기기 권장.</string>
@@ -102,7 +103,8 @@
     <string name="delete_button">모델 파일 삭제</string>
     <string name="selected_label">사용 중</string>
     <string name="select_label">선택</string>
-    <string name="whisper_info">설교 음성을 텍스트로 변환할 로컬 Whisper 모델을 관리합니다. 클라우드 필기는 secrets의 OPENAI_API_KEY를 이용하고, 로컬 오프라인 모드는 다운로드된 ggml .bin 모델을 직접 구동합니다.</string>
+    <string name="whisper_info">모델을 한 번만 다운로드하면 이후 모든 녹음의 전사, 요약, 개요 작성이 인터넷 연결 없이 기기에서 직접 처리됩니다.</string>
+    <string name="whisper_info_aikey">모든 AI 기능은 기기 내에서 완전 오프라인으로 동작합니다.</string>
     <string name="toast_download_start">Whisper %1$s 모델 다운로드를 시작합니다...</string>
     <string name="toast_download_success">Whisper %1$s 모델 다운로드가 성공적으로 완료되었습니다!</string>
     <string name="toast_download_failed">모델 다운로드에 실패했습니다. 인터넷 상태를 확인해 주세요.</string>
