@@ -14,7 +14,11 @@ class OfflineWhisperEngine(private val context: Context) : SpeechToTextEngine {
     private val TAG = "OfflineWhisperEngine"
     private val modelManager = WhisperModelManager(context)
 
-    override suspend fun transcribe(audioFile: File, modelKey: String): String {
+    override suspend fun transcribe(
+        audioFile: File,
+        modelKey: String,
+        onInferenceProgress: ((Int) -> Unit)?
+    ): String {
         Log.i(TAG, "Starting offline transcription for ${audioFile.name} using model: $modelKey")
 
         // 1. Verify JNI library is loaded
@@ -55,8 +59,14 @@ class OfflineWhisperEngine(private val context: Context) : SpeechToTextEngine {
             Log.d(TAG, "Executing native Whisper inference...")
             val systemLanguage = Locale.getDefault().language
             val effectiveLanguage = if (systemLanguage.isNotBlank()) systemLanguage else "auto"
-            
-            val resultText = WhisperLib.transcribeAudio(contextPtr, pcmData, effectiveLanguage)
+
+            val callback = onInferenceProgress?.let { sink ->
+                object : WhisperLib.ProgressCallback {
+                    override fun onProgress(percent: Int) = sink(percent)
+                }
+            }
+
+            val resultText = WhisperLib.transcribeAudio(contextPtr, pcmData, effectiveLanguage, callback)
             Log.i(TAG, "Offline transcription completed successfully.")
             return resultText
         } finally {

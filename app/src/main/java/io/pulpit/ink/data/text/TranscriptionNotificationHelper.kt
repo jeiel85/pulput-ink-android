@@ -76,20 +76,16 @@ object TranscriptionNotificationHelper {
         val headerTitle = if (isKo) "설교 전사 가공 중..." else "Transcribing Sermon..."
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download-1) // Use system active downloading icon
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("$headerTitle ($progress%)")
             .setContentText("$title — $statusMsg")
             .setSubText(statusMsg)
             .setOngoing(progress < 100) // Keep ongoing locked until fully complete
             .setAutoCancel(progress == 100)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setProgress(100, progress, false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-
-        // Standard microphone indicator as icon fallback if stat_sys_download is restricted
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            builder.setSmallIcon(android.R.drawable.ic_btn_speak_now)
-        }
 
         if (progress >= 100) {
             val completeTitle = if (isKo) "★ 전사 완료 ★" else "★ Transcription Complete ★"

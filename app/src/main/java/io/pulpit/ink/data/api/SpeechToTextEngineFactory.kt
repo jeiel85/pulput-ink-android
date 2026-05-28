@@ -17,19 +17,17 @@ object SpeechToTextEngineFactory {
     fun getEngine(context: Context, modelKey: String): SpeechToTextEngine {
         val config = WhisperModelConfig.fromKey(modelKey)
         val modelManager = WhisperModelManager(context)
-        val isModelDownloaded = modelManager.isModelDownloaded(config)
-        val isJniAvailable = WhisperLib.isLibraryLoaded
-
-        return if (isModelDownloaded && isJniAvailable) {
-            Log.i(TAG, "Selected Model '$modelKey' is downloaded and Whisper JNI library is loaded. Using OfflineWhisperEngine.")
-            OfflineWhisperEngine(context)
-        } else {
-            if (!isModelDownloaded) {
-                Log.i(TAG, "Model '$modelKey' is not downloaded locally. Falling back to OnlineOpenAIEngine.")
-            } else {
-                Log.w(TAG, "Local model '$modelKey' is downloaded, but Whisper JNI library (libwhisper.so) is missing. Falling back to OnlineOpenAIEngine.")
-            }
-            OnlineOpenAIEngine()
+        if (!WhisperLib.isLibraryLoaded) {
+            throw IllegalStateException(
+                "Whisper native library (libwhisper.so) failed to load — offline transcription unavailable."
+            )
         }
+        if (!modelManager.isModelDownloaded(config)) {
+            throw IllegalStateException(
+                "Whisper model '$modelKey' is not installed. Download it from settings first."
+            )
+        }
+        Log.i(TAG, "Resolved offline engine with model '$modelKey'.")
+        return OfflineWhisperEngine(context)
     }
 }

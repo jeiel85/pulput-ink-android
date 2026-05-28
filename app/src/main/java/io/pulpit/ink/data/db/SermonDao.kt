@@ -16,6 +16,9 @@ interface SermonDao {
     @Query("SELECT * FROM sermon_jobs WHERE id = :jobId")
     suspend fun getJobById(jobId: String): SermonJob?
 
+    @Query("SELECT * FROM sermon_jobs WHERE status = :status")
+    suspend fun getJobsByStatus(status: String): List<SermonJob>
+
     @Query("SELECT * FROM sermon_segments WHERE jobId = :jobId ORDER BY startSec ASC")
     fun getSegmentsByJobIdFlow(jobId: String): Flow<List<SermonSegment>>
 

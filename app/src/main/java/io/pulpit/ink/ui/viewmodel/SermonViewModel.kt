@@ -10,6 +10,7 @@ import io.pulpit.ink.data.db.AppDatabase
 import io.pulpit.ink.data.model.SermonJob
 import io.pulpit.ink.data.model.SermonSegment
 import io.pulpit.ink.data.repository.SermonRepository
+import io.pulpit.ink.data.repository.TranscriptionRunner
 import io.pulpit.ink.data.api.WhisperModelManager
 import io.pulpit.ink.data.api.WhisperModelConfig
 import io.pulpit.ink.ui.audio.AudioEngine
@@ -101,6 +102,11 @@ class SermonViewModel(
 
     init {
         refreshWhisperStates()
+        viewModelScope.launch {
+            // Sweep any jobs left in `Transcribing` state from a previous app run —
+            // the transcription runner can't survive process death.
+            repository.resetStuckTranscribingJobs()
+        }
         viewModelScope.launch {
             io.pulpit.ink.ui.audio.AudioRecordingService.newJobIdFlow.collect { jobId ->
                 _newJobFlow.emit(jobId)
@@ -214,15 +220,32 @@ class SermonViewModel(
        ========================================================================= */
 
     fun triggerTranscription(jobId: String, themeHint: String? = null) {
-        viewModelScope.launch {
-            postUiEvent(context.getString(R.string.status_transcribing))
-            val success = repository.transcribeJob(context, jobId, themeHint, selectedWhisperModel.value)
-            if (success) {
-                postUiEvent(context.getString(R.string.rec_complete))
-            } else {
-                postUiEvent(context.getString(R.string.transcription_failed))
+        // Guard: refuse to start if the chosen model isn't installed. Without this the
+        // factory would silently fall through to the (deprecated) online engine and the
+        // failure would only surface deep in the transcription pipeline.
+        val modelKey = selectedWhisperModel.value
+        val config = WhisperModelConfig.fromKey(modelKey)
+        if (!whisperModelManager.isModelDownloaded(config)) {
+            postUiEvent(context.getString(R.string.transcription_failed))
+            viewModelScope.launch {
+                repository.markJobFailed(
+                    jobId,
+                    if (isKoreanLanguage())
+                        "Whisper '$modelKey' 모델이 설치되어 있지 않습니다. 설정에서 먼저 다운로드해 주세요."
+                    else
+                        "Whisper '$modelKey' model is not installed. Please download it from settings first."
+                )
             }
+            return
         }
+        postUiEvent(context.getString(R.string.status_transcribing))
+        // Submit to the process-wide runner so the work survives ViewModel destruction.
+        TranscriptionRunner.submit(
+            context = context,
+            jobId = jobId,
+            topicHint = themeHint,
+            modelKey = modelKey
+        )
     }
 
     fun deleteSermon(jobId: String) {

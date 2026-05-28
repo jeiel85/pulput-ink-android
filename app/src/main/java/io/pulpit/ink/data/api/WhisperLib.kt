@@ -45,7 +45,24 @@ object WhisperLib {
      * @param contextPtr Pointer to the native whisper_context.
      * @param pcmData Raw PCM audio samples (16000Hz mono).
      * @param language ISO language code (e.g. "ko", "en", "auto").
+     * @param progressCallback Optional callback invoked from native code with the
+     *   current Whisper inference progress (0..100). May be `null`.
      * @return Transcribed raw text segment.
      */
-    external fun transcribeAudio(contextPtr: Long, pcmData: FloatArray, language: String): String
+    external fun transcribeAudio(
+        contextPtr: Long,
+        pcmData: FloatArray,
+        language: String,
+        progressCallback: ProgressCallback?
+    ): String
+
+    /**
+     * Progress sink implemented by Kotlin and called from the JNI layer during
+     * Whisper inference. Implementations must be cheap and thread-safe — the
+     * callback fires on a native worker thread that is attached to the JVM
+     * only for the duration of the call.
+     */
+    interface ProgressCallback {
+        fun onProgress(percent: Int)
+    }
 }

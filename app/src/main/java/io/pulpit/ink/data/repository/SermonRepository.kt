@@ -2,6 +2,9 @@ package io.pulpit.ink.data.repository
 
 import android.content.Context
 import io.pulpit.ink.data.api.SpeechToTextEngineFactory
+import io.pulpit.ink.data.api.WhisperLib
+import io.pulpit.ink.data.api.WhisperModelConfig
+import io.pulpit.ink.data.api.WhisperModelManager
 import io.pulpit.ink.data.text.OfflineTextProcessor
 import io.pulpit.ink.data.text.TranscriptionNotificationHelper
 import io.pulpit.ink.data.text.TranscriptCleaner
@@ -9,6 +12,7 @@ import io.pulpit.ink.data.db.SermonDao
 import io.pulpit.ink.data.model.SermonJob
 import io.pulpit.ink.data.model.SermonSegment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +35,34 @@ class SermonRepository(private val sermonDao: SermonDao) {
 
     suspend fun updateSegmentText(segmentId: Int, text: String) {
         sermonDao.updateSegmentText(segmentId, text)
+    }
+
+    /**
+     * Force a job into the Failed state. Safe to call from cleanup paths — runs in
+     * NonCancellable so the DB write completes even if the caller's scope was cancelled.
+     */
+    suspend fun markJobFailed(jobId: String, message: String) {
+        withContext(NonCancellable) {
+            val job = sermonDao.getJobById(jobId) ?: return@withContext
+            sermonDao.insertJob(job.copy(status = "Failed", errorMessage = message))
+        }
+    }
+
+    /**
+     * Sweep orphaned `Transcribing` jobs at app startup. The transcription runner
+     * cannot survive process death, so anything still marked Transcribing at startup
+     * must have been interrupted.
+     */
+    suspend fun resetStuckTranscribingJobs() {
+        val stuck = sermonDao.getJobsByStatus("Transcribing")
+        if (stuck.isEmpty()) return
+        val msg = if (Locale.getDefault().language == "ko")
+            "이전 전사 작업이 중단되었습니다. 다시 시도해 주세요."
+        else
+            "Previous transcription was interrupted. Please retry."
+        stuck.forEach { job ->
+            sermonDao.insertJob(job.copy(status = "Failed", errorMessage = msg))
+        }
     }
 
     suspend fun createNewJob(title: String, audioPath: String, durationSec: Double): String {
@@ -58,58 +90,80 @@ class SermonRepository(private val sermonDao: SermonDao) {
         selectedModelKey: String = "base"
     ): Boolean = withContext(Dispatchers.IO) {
         val job = sermonDao.getJobById(jobId) ?: return@withContext false
-        sermonDao.insertJob(job.copy(status = "Transcribing"))
-
         val isKo = java.util.Locale.getDefault().language == "ko"
         val title = job.title
 
+        // --- Pre-flight: fail fast and DO NOT mark Transcribing if we can't actually run.
+        val audioFile = File(job.audioPath)
+        if (!audioFile.exists() || audioFile.length() == 0L) {
+            markJobFailed(jobId, "Audio file missing or empty: ${job.audioPath}")
+            return@withContext false
+        }
+        if (!WhisperLib.isLibraryLoaded) {
+            markJobFailed(
+                jobId,
+                if (isKo) "전사 엔진(libwhisper.so) 로드 실패. 앱을 재설치해 주세요."
+                else "Whisper native library failed to load. Please reinstall the app."
+            )
+            return@withContext false
+        }
+        val modelManager = WhisperModelManager(context)
+        val modelConfig = WhisperModelConfig.fromKey(selectedModelKey)
+        if (!modelManager.isModelDownloaded(modelConfig)) {
+            markJobFailed(
+                jobId,
+                if (isKo) "Whisper '${modelConfig.modelKey}' 모델이 설치되어 있지 않습니다. 설정에서 먼저 다운로드해 주세요."
+                else "Whisper '${modelConfig.modelKey}' model is not installed. Please download it from settings first."
+            )
+            return@withContext false
+        }
+
+        // All pre-flight checks passed — claim the job.
+        sermonDao.insertJob(job.copy(status = "Transcribing", errorMessage = null))
+
         try {
-            // Update 1: Init / Start
             TranscriptionNotificationHelper.showProgressNotification(
-                context, jobId, title, 10, 
+                context, jobId, title, 10,
                 if (isKo) "대기 중..." else "Waiting..."
             )
 
-            val audioFile = File(job.audioPath)
-            if (!audioFile.exists() || audioFile.length() == 0L) {
-                sermonDao.insertJob(job.copy(
-                    status = "Failed",
-                    errorMessage = "Audio file missing or empty: ${job.audioPath}"
-                ))
-                TranscriptionNotificationHelper.dismissNotification(context, jobId)
-                return@withContext false
-            }
-
-            // Update 2: Audio Decoding Stage
             TranscriptionNotificationHelper.showProgressNotification(
-                context, jobId, title, 20, 
+                context, jobId, title, 20,
                 if (isKo) "오디오 디코딩 중..." else "Decoding audio..."
             )
 
-            // Resolve optimal STT engine dynamically using Factory
             val engine = SpeechToTextEngineFactory.getEngine(context, selectedModelKey)
-            
-            // Update 3: AI Inference Stage
+
             TranscriptionNotificationHelper.showProgressNotification(
-                context, jobId, title, 40, 
+                context, jobId, title, 40,
                 if (isKo) "Whisper AI 분석 중..." else "Running Whisper AI inference..."
             )
-            val rawTranscript = engine.transcribe(audioFile, selectedModelKey)
 
-            // Update 4: NLP Cleanup Stage
+            // Whisper inference is the long pole — without progress feedback the
+            // notification appears frozen at 40% for minutes. Map the native 0..100
+            // callback onto the 40..70% slice of the overall job and throttle to
+            // every 5% to avoid notification spam.
+            var lastShown = 40
+            val rawTranscript = engine.transcribe(audioFile, selectedModelKey) { nativePercent ->
+                val overall = 40 + (nativePercent.coerceIn(0, 100) * 30 / 100)
+                if (overall - lastShown >= 5 && overall < 75) {
+                    lastShown = overall
+                    TranscriptionNotificationHelper.showProgressNotification(
+                        context, jobId, title, overall,
+                        if (isKo) "Whisper AI 분석 중... ($nativePercent%)"
+                        else "Running Whisper AI inference... ($nativePercent%)"
+                    )
+                }
+            }
+
             TranscriptionNotificationHelper.showProgressNotification(
-                context, jobId, title, 75, 
+                context, jobId, title, 75,
                 if (isKo) "맞춤법 교정 및 요약/아웃라인 가공 중..." else "Proofreading & structuring outline..."
             )
 
-            // Local deterministic cleanup (whitespace + Whisper repeat-loop dedup).
             val cleanedTranscript = TranscriptCleaner.clean(rawTranscript)
-            
-            // Fully Offline High-quality grammar and spacing correction
             val correctedTranscript = OfflineTextProcessor.correctTranscript(cleanedTranscript)
-            writeSegments(jobId, job.durationSec, correctedTranscript)
 
-            // Fully Offline post-processing
             val finalTitle = computeOfflineTitle(job.title, correctedTranscript)
             val summary = OfflineTextProcessor.generateSummary(finalTitle, correctedTranscript)
             val refs = OfflineTextProcessor.extractBibleReferences(correctedTranscript)
@@ -117,36 +171,38 @@ class SermonRepository(private val sermonDao: SermonDao) {
             val nouns = OfflineTextProcessor.extractProperNouns(correctedTranscript)
             val keywords = OfflineTextProcessor.extractKeywords(correctedTranscript)
 
-            sermonDao.insertJob(
-                job.copy(
-                    title = finalTitle,
-                    status = "Done",
-                    summary = summary,
-                    outline = outline,
-                    bibleRefs = refs,
-                    properNouns = nouns,
-                    keywords = keywords
+            // Persist final state under NonCancellable so a late scope cancellation can't
+            // leave the job stuck at Transcribing with completed text already in memory.
+            withContext(NonCancellable) {
+                writeSegments(jobId, job.durationSec, correctedTranscript)
+                sermonDao.insertJob(
+                    job.copy(
+                        title = finalTitle,
+                        status = "Done",
+                        errorMessage = null,
+                        summary = summary,
+                        outline = outline,
+                        bibleRefs = refs,
+                        properNouns = nouns,
+                        keywords = keywords
+                    )
                 )
-            )
+            }
 
-            // Update 5: Completed 100%
             TranscriptionNotificationHelper.showProgressNotification(
-                context, jobId, finalTitle, 100, 
+                context, jobId, finalTitle, 100,
                 if (isKo) "가공 완료!" else "Transcription successful!"
             )
             return@withContext true
         } catch (e: Exception) {
-            sermonDao.insertJob(
-                job.copy(
-                    status = "Failed",
-                    errorMessage = e.localizedMessage ?: "Transcription failed"
-                )
-            )
-            // Error Notification State
+            withContext(NonCancellable) {
+                markJobFailed(jobId, e.localizedMessage ?: "Transcription failed")
+            }
             TranscriptionNotificationHelper.showProgressNotification(
-                context, jobId, title, 100, 
+                context, jobId, title, 100,
                 if (isKo) "전사 분석 실패" else "Transcription failed"
             )
+            if (e is kotlinx.coroutines.CancellationException) throw e
             return@withContext false
         }
     }

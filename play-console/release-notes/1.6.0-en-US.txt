@@ -1,0 +1,9 @@
+<en-US>
+Transcription stability & UX polish (v1.6.0)
+
+1. [Stable transcription state] Fixed a critical bug where jobs could get stuck in "Transcribing" forever after the recording service stopped. Every transcription now either finishes or fails with a clear reason — no more lingering "AI syncing" badges.
+2. [Real-time inference progress] The status bar notification used to freeze at 40% during Whisper inference. It now updates live every 5% as the model processes, so you can tell at a glance how far along it is.
+3. [Consistent quick-panel controls] Removed the misleading pause icon from the recording notification and Samsung Now Brief tile. The Transcribe and Discard buttons now share a unified Material icon style.
+4. [Fail-fast on missing model] If the selected Whisper model isn't installed, the app no longer gets stuck — it surfaces a clear message immediately and stays out of the broken "Transcribing" state.
+5. [Auto-recover on app launch] Any jobs left over from an interrupted previous session are reset on startup, so your sermon library stays clean.
+</en-US>

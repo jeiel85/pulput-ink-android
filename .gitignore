@@ -19,3 +19,4 @@ debug.keystore
 keystore.properties
 *.jks
 .keystore/
+.test-screenshots/

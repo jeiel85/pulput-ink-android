@@ -12,6 +12,7 @@ import io.pulpit.ink.MainActivity
 import io.pulpit.ink.R
 import io.pulpit.ink.data.db.AppDatabase
 import io.pulpit.ink.data.repository.SermonRepository
+import io.pulpit.ink.data.repository.TranscriptionRunner
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -129,38 +130,32 @@ class AudioRecordingService : Service() {
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, topic.ifBlank { if (isKo) "실시간 오디오 캡처" else "Live Audio Capture" })
                 setMetadata(metadataBuilder.build())
 
-                val completeLabel = if (isKo) "녹음 완료" else "Complete"
-                val discardLabel = if (isKo) "취소" else "Discard"
+                val transcribeLabel = getString(R.string.transcribe)
+                val discardLabel = getString(R.string.discard)
 
+                // No ACTION_PLAY_PAUSE / ACTION_STOP — we don't support pause, and mapping
+                // the system Pause icon to "save & stop" was misleading users. We rely on
+                // our own custom actions, both rendered with matching Material icons.
                 val state = PlaybackState.Builder()
                     .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
-                    .setActions(PlaybackState.ACTION_STOP or PlaybackState.ACTION_PLAY_PAUSE)
                     .addCustomAction(
                         PlaybackState.CustomAction.Builder(
                             CUSTOM_ACTION_COMPLETE,
-                            completeLabel,
-                            android.R.drawable.ic_menu_save
+                            transcribeLabel,
+                            R.drawable.ic_action_transcribe
                         ).build()
                     )
                     .addCustomAction(
                         PlaybackState.CustomAction.Builder(
                             CUSTOM_ACTION_DISCARD,
                             discardLabel,
-                            android.R.drawable.ic_menu_delete
+                            R.drawable.ic_action_discard
                         ).build()
                     )
                     .build()
                 setPlaybackState(state)
 
                 setCallback(object : MediaSession.Callback() {
-                    override fun onStop() {
-                        Log.d(TAG, "MediaSession.Callback: onStop triggered")
-                        stopRecordingAndSaveService()
-                    }
-                    override fun onPause() {
-                        Log.d(TAG, "MediaSession.Callback: onPause triggered, mapping to stop")
-                        stopRecordingAndSaveService()
-                    }
                     override fun onCustomAction(action: String, extras: android.os.Bundle?) {
                         Log.d(TAG, "MediaSession.Callback: onCustomAction=$action")
                         when (action) {
@@ -222,14 +217,21 @@ class AudioRecordingService : Service() {
                     audioPath = capturedFile.absolutePath,
                     durationSec = if (_durationSec.value > 0) _durationSec.value else finalDuration
                 )
-                
+
                 // Emit new job event to trigger navigation
                 _newJobIdFlow.emit(jobId)
-                
-                // Trigger offline transcribing asynchronously
-                launch(Dispatchers.IO) {
-                    repository.transcribeJob(applicationContext, jobId, finalTopic)
-                }
+
+                // Hand transcription off to the process-wide runner. Doing this on
+                // serviceScope used to cancel the work as soon as stopSelf() ran.
+                val modelKey = applicationContext
+                    .getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
+                    .getString("selected_model", "base") ?: "base"
+                TranscriptionRunner.submit(
+                    context = applicationContext,
+                    jobId = jobId,
+                    topicHint = finalTopic,
+                    modelKey = modelKey
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving recording job from background service", e)
             } finally {
@@ -326,17 +328,19 @@ class AudioRecordingService : Service() {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             builder.setCategory(Notification.CATEGORY_SERVICE)
-            
-            // Add Actions for Media Controls mapping
+
+            // Match the MediaSession action labels: "필기 시작" / "취소". The same icons are
+            // used so the notification expanded view and the quick-panel media tile stay
+            // visually consistent.
             val stopAction = Notification.Action.Builder(
-                android.R.drawable.ic_menu_save, 
-                if (isKo) "녹음 완료" else "Complete", 
+                R.drawable.ic_action_transcribe,
+                getString(R.string.transcribe),
                 pendingStopIntent
             ).build()
-            
+
             val cancelAction = Notification.Action.Builder(
-                android.R.drawable.ic_menu_delete, 
-                if (isKo) "취소" else "Discard", 
+                R.drawable.ic_action_discard,
+                getString(R.string.discard),
                 pendingCancelIntent
             ).build()
 
