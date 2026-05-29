@@ -21,7 +21,3 @@ keystore.properties
 *.jks
 .keystore/
 .test-screenshots/
-
-# Play Asset Delivery model binary — fetched at build time, never committed.
-# See scripts/fetch-base-model.ps1
-/base_model/src/main/assets/models/*.bin

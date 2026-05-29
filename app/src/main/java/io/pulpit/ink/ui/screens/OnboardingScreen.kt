@@ -17,14 +17,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.pulpit.ink.R
-import io.pulpit.ink.data.api.AssetModelDelivery
-import io.pulpit.ink.data.api.WhisperModelConfig
 import io.pulpit.ink.ui.viewmodel.SermonViewModel
 
 /**
  * First-launch onboarding. Explains the offline-transcription value proposition
- * and surfaces acquisition of the default (base) model — delivered automatically
- * via Play Asset Delivery, or downloaded directly as a sideload fallback.
+ * and guides the user through downloading the default (base) model once. The
+ * download itself runs via [ModelDownloadService] (foreground, resumable), so
+ * progress is reflected from the view model's download state.
  */
 @Composable
 fun OnboardingScreen(
@@ -36,39 +35,23 @@ fun OnboardingScreen(
     val primaryEmerald = Color(0xFFD0BCFF)
     val softSlate = Color(0xFFCAC4D0)
 
-    val delivery by viewModel.baseDelivery.collectAsState()
     val downloadStates by viewModel.downloadState.collectAsState()
     val downloadProgresses by viewModel.downloadProgress.collectAsState()
 
-    // Kick off model acquisition as soon as onboarding appears.
+    // Refresh once so an already-downloaded model is reflected immediately.
     LaunchedEffect(Unit) {
-        viewModel.ensureBaseModelForOnboarding()
+        viewModel.refreshWhisperStates()
     }
 
     val baseState = downloadStates["base"] ?: "not_downloaded"
-    val isReady = baseState == "downloaded" ||
-        delivery?.status == AssetModelDelivery.Status.COMPLETED
-
-    // Resolve a single user-facing status + progress from PAD / HF sources.
-    val padStatus = delivery?.status
-    val isWaitingWifi = padStatus == AssetModelDelivery.Status.WAITING_FOR_WIFI
-    val padActive = padStatus == AssetModelDelivery.Status.DOWNLOADING ||
-        padStatus == AssetModelDelivery.Status.TRANSFERRING ||
-        padStatus == AssetModelDelivery.Status.PENDING
-    val hfActive = baseState == "downloading"
-
-    val progressPercent: Int? = when {
-        isReady -> 100
-        padActive -> delivery?.percent ?: 0
-        hfActive -> downloadProgresses["base"] ?: 0
-        else -> null
-    }
+    val isReady = baseState == "downloaded"
+    val isDownloading = baseState == "downloading"
+    val progressPercent = downloadProgresses["base"] ?: 0
 
     val statusText = when {
         isReady -> stringResource(R.string.onboarding_model_ready)
-        isWaitingWifi -> stringResource(R.string.onboarding_model_waiting_wifi)
-        progressPercent != null -> stringResource(R.string.onboarding_model_downloading)
-        else -> stringResource(R.string.onboarding_model_preparing)
+        isDownloading -> stringResource(R.string.onboarding_model_downloading)
+        else -> stringResource(R.string.onboarding_model_intro)
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = background) {
@@ -126,7 +109,7 @@ fun OnboardingScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (!isReady && progressPercent != null) {
+                        if (isDownloading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
@@ -142,21 +125,42 @@ fun OnboardingScreen(
                         )
                     }
 
-                    AnimatedVisibility(visible = !isReady && progressPercent != null) {
+                    AnimatedVisibility(visible = isDownloading) {
                         Column {
                             Spacer(Modifier.height(12.dp))
                             LinearProgressIndicator(
-                                progress = { (progressPercent ?: 0) / 100f },
+                                progress = { progressPercent / 100f },
                                 modifier = Modifier.fillMaxWidth(),
                                 color = primaryEmerald,
                                 trackColor = Color(0xFF49454F)
                             )
                             Spacer(Modifier.height(4.dp))
                             Text(
-                                text = "${progressPercent ?: 0}%",
+                                text = "$progressPercent%",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = softSlate
                             )
+                        }
+                    }
+
+                    // Download trigger (only before the model is ready / downloading)
+                    AnimatedVisibility(visible = !isReady && !isDownloading) {
+                        Column {
+                            Spacer(Modifier.height(16.dp))
+                            Button(
+                                onClick = { viewModel.ensureBaseModelForOnboarding() },
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = primaryEmerald,
+                                    contentColor = Color(0xFF1C1B1F)
+                                )
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.onboarding_download),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
 
@@ -183,6 +187,7 @@ fun OnboardingScreen(
 
             Button(
                 onClick = {
+                    if (isReady) viewModel.selectWhisperModel("base")
                     viewModel.completeOnboarding()
                     onFinish()
                 },

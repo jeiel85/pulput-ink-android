@@ -21,7 +21,6 @@ class WhisperModelManagerTest {
 
     @Test
     fun `resolveModelFile is null when nothing downloaded`() {
-        // No PAD pack (Robolectric) and no app-storage copy → unavailable.
         assertNull(manager.resolveModelFile(WhisperModelConfig.TINY))
         assertFalse(manager.isModelDownloaded(WhisperModelConfig.TINY))
     }
@@ -39,9 +38,7 @@ class WhisperModelManagerTest {
     }
 
     @Test
-    fun `base falls back to app storage when PAD pack absent`() {
-        // bundledBaseModelFile() returns null under Robolectric (no Play), so the
-        // app-storage copy (sideload/HF fallback) must still resolve.
+    fun `base resolves from app storage once downloaded`() {
         assertNull(manager.resolveModelFile(WhisperModelConfig.BASE))
 
         val target = File(context.filesDir, WhisperModelConfig.BASE.filename)

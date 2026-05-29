@@ -119,11 +119,11 @@
     <string name="onboarding_offline_badge">100% 오프라인</string>
     <string name="onboarding_welcome_title">설교를 내 기기 안에서\n안전하게 텍스트로</string>
     <string name="onboarding_welcome_body">Pulpit Ink는 녹음을 이 휴대폰 안에서만 필기로 옮깁니다. 어디에도 업로드되지 않아 설교는 온전히 내 것으로 남습니다.</string>
-    <string name="onboarding_model_section_title">필기 모델 준비 중</string>
-    <string name="onboarding_model_preparing">필기 모델을 준비하고 있어요…</string>
+    <string name="onboarding_model_section_title">필기 모델 준비</string>
+    <string name="onboarding_model_intro">필기를 시작하려면 기본 모델을 한 번 받아야 해요.</string>
     <string name="onboarding_model_downloading">필기 모델을 받는 중이에요…</string>
     <string name="onboarding_model_ready">필기 모델이 준비됐어요</string>
-    <string name="onboarding_model_waiting_wifi">Wi-Fi 연결을 기다리는 중이에요…</string>
+    <string name="onboarding_download">기본 모델 다운로드</string>
     <string name="onboarding_wifi_note">모델 용량은 약 142MB입니다. 첫 다운로드는 Wi-Fi를 권장하며, 한 번만 받으면 됩니다.</string>
     <string name="onboarding_model_choice_note">더 가볍거나 더 정확한 모델이 필요하면 설정에서 언제든 바꿀 수 있어요.</string>
     <string name="onboarding_start">시작하기</string>

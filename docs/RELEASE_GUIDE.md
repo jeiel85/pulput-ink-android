@@ -14,26 +14,10 @@ Pulpit Ink의 메타데이터 및 릴리즈 체크 리스트는 다음 디렉터
 
 ---
 
-## 1-A. (필수) 번들 모델 바이너리 확보
-
-기본 Whisper 모델(`ggml-base.bin`, 약 142 MB)은 **Play Asset Delivery(fast-follow)** 로
-앱 번들에 포함되어, 사용자가 앱 설치 직후 별도 조작 없이 자동으로 내려받습니다.
-
-이 142 MB 바이너리는 **git에 커밋하지 않으므로**(`.gitignore` 처리됨), 릴리즈 번들을
-빌드하기 **전에 반드시** 아래 스크립트로 받아서 `:base_model` 에셋 팩 안에 채워야 합니다.
-파일이 없으면 에셋 팩이 비어 배포 후 모델 자동 다운로드가 동작하지 않습니다.
-
-```powershell
-pwsh -File scripts/fetch-base-model.ps1
-```
-
-- 이미 올바른 크기의 파일이 있으면 건너뜁니다(재실행 안전). 다시 받으려면 `-Force`.
-- 위치: `base_model/src/main/assets/models/ggml-base.bin`
-
-> [!IMPORTANT]
-> `installDebug`/사이드로드 등 **Play를 거치지 않는 설치**에서는 fast-follow 에셋이
-> 전달되지 않습니다. 이 경우 앱은 온보딩 화면에서 Hugging Face 직접 다운로드로
-> fallback 합니다. 정식 Play 배포(AAB)에서만 자동 번들 전달이 동작합니다.
+> [!NOTE]
+> 필기 모델(`ggml-base.bin` 등)은 앱 번들에 포함하지 않습니다. 사용자가 **첫 실행
+> 온보딩 화면에서 직접 다운로드**(또는 설정에서 다운로드)하는 방식이라, 릴리즈 빌드
+> 전 별도의 모델 확보 단계가 필요 없습니다.
 
 ---
 

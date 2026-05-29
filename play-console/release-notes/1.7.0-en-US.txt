@@ -1,7 +1,7 @@
 Getting started is now much friendlier.
 
 • New first-run guide — see what you can do the moment you open the app.
-• Automatic model setup — the model needed for transcription is prepared for you, so you can start right away without digging through settings.
+• Guided model setup — download the model you need for transcription right from the welcome screen.
 • Refreshed Settings — grouped by topic, with smooth transitions and the haptics switch right up front.
 • Polished layout so text stays readable on any screen.
 

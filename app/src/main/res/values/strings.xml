@@ -119,11 +119,11 @@
     <string name="onboarding_offline_badge">100% OFFLINE</string>
     <string name="onboarding_welcome_title">Turn your sermons into text — privately, on your device</string>
     <string name="onboarding_welcome_body">Pulpit Ink transcribes your recordings entirely on this phone. Nothing is uploaded, so your sermons stay yours.</string>
-    <string name="onboarding_model_section_title">Setting up your transcription model</string>
-    <string name="onboarding_model_preparing">Preparing your transcription model…</string>
+    <string name="onboarding_model_section_title">Set up your transcription model</string>
+    <string name="onboarding_model_intro">To start transcribing, download the base model once.</string>
     <string name="onboarding_model_downloading">Downloading the transcription model…</string>
     <string name="onboarding_model_ready">Your transcription model is ready</string>
-    <string name="onboarding_model_waiting_wifi">Waiting for Wi-Fi to download the model…</string>
+    <string name="onboarding_download">Download base model</string>
     <string name="onboarding_wifi_note">The model is about 142 MB. We recommend Wi-Fi for the first download. You only need to do this once.</string>
     <string name="onboarding_model_choice_note">Prefer a lighter or more accurate model? You can switch anytime in Settings.</string>
     <string name="onboarding_start">Get started</string>

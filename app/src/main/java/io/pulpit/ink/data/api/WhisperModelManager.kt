@@ -2,7 +2,6 @@ package io.pulpit.ink.data.api
 
 import android.content.Context
 import android.util.Log
-import com.google.android.play.core.assetpacks.AssetPackManagerFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,49 +19,15 @@ class WhisperModelManager(private val context: Context) {
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
-    private val assetPackManager by lazy { AssetPackManagerFactory.getInstance(context) }
-
-    companion object {
-        /** Play Asset Delivery pack name that bundles the default (base) model. */
-        const val BASE_ASSET_PACK = "base_model"
-        /** Path of the model file inside the asset pack's assets folder. */
-        private const val BASE_ASSET_RELATIVE_PATH = "models/ggml-base.bin"
-    }
-
-    /** Where a manually/HF-downloaded model is stored in app-private storage. */
+    /** Where a downloaded model is stored in app-private storage. */
     fun getModelFile(config: WhisperModelConfig): File {
         return File(context.filesDir, config.filename)
     }
 
-    /**
-     * The PAD-delivered base model on disk, or null if the fast-follow pack
-     * has not been delivered yet (e.g. download still in progress, or the app
-     * was sideloaded and never went through Play).
-     */
-    fun bundledBaseModelFile(): File? {
-        val location = try {
-            assetPackManager.getPackLocation(BASE_ASSET_PACK)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to query asset pack location", e)
-            null
-        } ?: return null
-        val assetsPath = location.assetsPath() ?: return null
-        val file = File(assetsPath, BASE_ASSET_RELATIVE_PATH)
-        return if (file.exists() && file.length() > 0) file else null
-    }
-
-    /**
-     * Resolves the actual model file to load. For the base model the bundled
-     * PAD copy wins; otherwise (and as a sideload fallback for base) it uses the
-     * app-storage copy fetched via [downloadModel]. Returns null if no usable
-     * copy exists yet.
-     */
+    /** Resolves the model file to load, or null if no usable copy is downloaded. */
     fun resolveModelFile(config: WhisperModelConfig): File? {
-        if (config == WhisperModelConfig.BASE) {
-            bundledBaseModelFile()?.let { return it }
-        }
-        val downloaded = getModelFile(config)
-        return if (downloaded.exists() && downloaded.length() > 0) downloaded else null
+        val file = getModelFile(config)
+        return if (file.exists() && file.length() > 0) file else null
     }
 
     fun isModelDownloaded(config: WhisperModelConfig): Boolean {

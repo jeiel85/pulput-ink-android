@@ -19,11 +19,6 @@ android {
   namespace = "io.pulpit.ink"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
-  // Bundle the default Whisper model (base) via Play Asset Delivery. fast-follow
-  // makes Play download it automatically right after install, so first-run users
-  // get a working model without manually triggering a download.
-  assetPacks += listOf(":base_model")
-
   defaultConfig {
     applicationId = "io.pulpit.ink"
     minSdk = 24
@@ -146,8 +141,6 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  implementation(libs.play.asset.delivery)
-  implementation(libs.play.asset.delivery.ktx)
   // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
