@@ -17,10 +17,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,9 +40,15 @@ import io.pulpit.ink.R
 import io.pulpit.ink.data.model.SermonJob
 import io.pulpit.ink.data.model.SermonSegment
 import io.pulpit.ink.ui.viewmodel.SermonViewModel
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.ExperimentalFoundationApi
+import io.pulpit.ink.ui.theme.bounceClickable
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DetailScreen(
     viewModel: SermonViewModel,
@@ -54,13 +63,14 @@ fun DetailScreen(
     val playbackProgress by viewModel.playbackProgress.collectAsState()
     val playbackDuration by viewModel.playbackDuration.collectAsState()
 
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { 4 })
+    val coroutineScope = rememberCoroutineScope()
 
     // Automatically shift to Transcript tab once the sermon transcription completes successfully
     LaunchedEffect(activeJob) {
         val job = activeJob
-        if (job != null && job.status == "Done" && selectedTabIndex == 0) {
-            selectedTabIndex = 1
+        if (job != null && job.status == "Done" && pagerState.currentPage == 0) {
+            pagerState.animateScrollToPage(1)
         }
     }
 
@@ -127,20 +137,24 @@ fun DetailScreen(
             ) {
                 // Slideway navigation tabs
                 SecondaryTabRow(
-                    selectedTabIndex = selectedTabIndex,
+                    selectedTabIndex = pagerState.currentPage,
                     containerColor = parchmentBackground,
                     contentColor = primaryEmerald
                 ) {
                     tabTitles.forEachIndexed { index, title ->
                         Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
+                            selected = pagerState.currentPage == index,
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(index)
+                                }
+                            },
                             text = {
                                 Text(
                                     text = title,
                                     style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selectedTabIndex == index) primaryIndigo else softSlate,
+                                    fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (pagerState.currentPage == index) primaryIndigo else softSlate,
                                     modifier = Modifier.testTag("detail_tab_$index")
                                 )
                             }
@@ -148,23 +162,28 @@ fun DetailScreen(
                     }
                 }
 
-                Box(
+                HorizontalPager(
+                    state = pagerState,
+                    beyondViewportPageCount = 2,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                ) {
-                    when (selectedTabIndex) {
+                ) { page ->
+                    when (page) {
                         0 -> BriefingPlayerTab(
                             job = job,
                             isPlaying = isPlaying,
                             progress = playbackProgress,
                             duration = playbackDuration,
                             onPlayToggle = { viewModel.togglePlayback(job.audioPath) },
-                            onSeek = { viewModel.seekPlayback(it) }
+                            onSeek = { viewModel.seekPlayback(it) },
+                            viewModel = viewModel
                         )
                         1 -> TranscriptTab(
+                            jobId = job.id,
                             segments = segments,
                             jobStatus = job.status,
+                            viewModel = viewModel,
                             onEditSegment = { id, text -> viewModel.editSegment(id, text) }
                         )
                         2 -> OutlineTab(
@@ -193,13 +212,15 @@ fun BriefingPlayerTab(
     progress: Int,
     duration: Int,
     onPlayToggle: () -> Unit,
-    onSeek: (Int) -> Unit
+    onSeek: (Int) -> Unit,
+    viewModel: SermonViewModel
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     val emerald = Color(0xFFD0BCFF)
     val textDeep = Color(0xFFE6E1E5)
     val textMuted = Color(0xFFCAC4D0)
+    val isKo = java.util.Locale.getDefault().language == "ko"
 
     Column(
         modifier = Modifier
@@ -208,6 +229,43 @@ fun BriefingPlayerTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Error Display Card (If failed)
+        if (job.status == "Failed" && !job.errorMessage.isNullOrBlank()) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF3B1E1E)),
+                border = BorderStroke(1.dp, Color(0xFFF2B8B5).copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ErrorOutline,
+                        contentDescription = null,
+                        tint = Color(0xFFF2B8B5),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (isKo) "상세 오류 내용" else "Detailed Error Details",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFF2B8B5)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = job.errorMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFCAC4D0)
+                        )
+                    }
+                }
+            }
+        }
+
         // Metadata metrics card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -265,6 +323,78 @@ fun BriefingPlayerTab(
                         }
                     }
                 }
+            }
+        }
+
+        // 1.5 Transcription Retry Button
+        if (job.status == "Failed" || job.status == "Done") {
+            var showConfirmDialog by remember { mutableStateOf(false) }
+            
+            Button(
+                onClick = {
+                    if (job.status == "Done") {
+                        showConfirmDialog = true
+                    } else {
+                        viewModel.triggerTranscription(job.id)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (job.status == "Failed") MaterialTheme.colorScheme.error else emerald,
+                    contentColor = if (job.status == "Failed") Color.White else Color(0xFF381E72)
+                ),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("re_transcribe_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isKo) "필기 다시 시작" else "Restart Transcription",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+            
+            if (showConfirmDialog) {
+                AlertDialog(
+                    onDismissRequest = { showConfirmDialog = false },
+                    title = {
+                        Text(
+                            text = if (isKo) "필기 다시 시작" else "Restart Transcription",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = if (isKo) "이미 완성된 설교 필기 노트와 개요가 존재합니다. 다시 필기 작성을 시작하면 기존 필기 노트 정보와 사용자 수정 내역이 모두 초기화되고 새로 분석을 수행합니다. 계속하시겠습니까?"
+                                   else "A completed set of notes and outline already exist. Re-transcribing will reset all existing note text, outline details, and manual corrections. Do you want to proceed?"
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showConfirmDialog = false
+                                viewModel.triggerTranscription(job.id)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = emerald)
+                        ) {
+                            Text(
+                                text = if (isKo) "재시도 시작" else "Start Retry",
+                                color = Color(0xFF381E72)
+                            )
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showConfirmDialog = false }) {
+                            Text(text = if (isKo) "취소" else "Cancel")
+                        }
+                    }
+                )
             }
         }
 
@@ -358,7 +488,7 @@ fun BriefingPlayerTab(
                         .size(64.dp)
                         .clip(CircleShape)
                         .background(emerald)
-                        .clickable { onPlayToggle() }
+                        .bounceClickable { onPlayToggle() }
                         .testTag("playback_toggle"),
                     contentAlignment = Alignment.Center
                 ) {
@@ -424,8 +554,8 @@ fun BriefingPlayerTab(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isKo) "상단의 \'전사본\' 탭에서 전체 텍스트 확인 및 편집이 가능합니다." 
-                               else "View and edit full text in the \'Transcript Editor\' tab above.",
+                        text = if (isKo) "상단의 \'필기 노트\' 탭에서 전체 텍스트 확인 및 편집이 가능합니다." 
+                               else "View and edit full text in the \'Notes\' tab above.",
                         style = MaterialTheme.typography.bodySmall,
                         color = emerald,
                         fontWeight = FontWeight.SemiBold
@@ -453,25 +583,161 @@ fun MetaBadge(label: String, value: String, icon: androidx.compose.ui.graphics.v
    ========================================================================= */
 @Composable
 fun TranscriptTab(
+    jobId: String,
     segments: List<SermonSegment>,
     jobStatus: String,
+    viewModel: SermonViewModel,
     onEditSegment: (Int, String) -> Unit
 ) {
     var editSegmentDialogFor by remember { mutableStateOf<SermonSegment?>(null) }
     val emerald = Color(0xFFD0BCFF)
     val textDeep = Color(0xFFE6E1E5)
     val textMuted = Color(0xFFCAC4D0)
+    
+    val transcriptionProgresses by viewModel.transcriptionProgress.collectAsState()
 
     if (jobStatus == "Transcribing") {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = emerald, modifier = Modifier.size(48.dp))
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.aligning_records),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = textMuted
+        val transcribingProgress = transcriptionProgresses[jobId] ?: 40
+        val isKo = java.util.Locale.getDefault().language == "ko"
+        val statusText = when {
+            transcribingProgress < 20 -> if (isKo) "필기 준비 중..." else "Preparing..."
+            transcribingProgress < 30 -> if (isKo) "오디오 디코딩 중..." else "Decoding audio..."
+            transcribingProgress < 40 -> if (isKo) "필기 엔진 모델 로딩 중..." else "Loading transcription model..."
+            transcribingProgress < 75 -> {
+                val nativePct = ((transcribingProgress - 40) * 100 / 35).coerceIn(0, 100)
+                if (isKo) "음성 필기 분석 중... ($nativePct%)" else "Analyzing audio speech... ($nativePct%)"
+            }
+            else -> if (isKo) "맞춤법 교정 및 요약/개요서 가공 중..." else "Proofreading & summarizing notes..."
+        }
+        
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Ambient pulsing aura behind the glass card
+            val infiniteTransition = rememberInfiniteTransition(label = "ambient_glow")
+            val glowScaleState = infiniteTransition.animateFloat(
+                initialValue = 0.85f,
+                targetValue = 1.15f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(5000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "glow_scale"
+            )
+            val glowAlphaState = infiniteTransition.animateFloat(
+                initialValue = 0.12f,
+                targetValue = 0.28f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(5000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "glow_alpha"
+            )
+
+            // Cache brushes to prevent memory allocations during draw and layout passes
+            val radialGradientBrush = remember(emerald) {
+                Brush.radialGradient(
+                    colors = listOf(emerald, Color.Transparent)
                 )
+            }
+            val borderBrush = remember {
+                Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.15f),
+                        Color.White.copy(alpha = 0.03f)
+                    )
+                )
+            }
+
+            Canvas(
+                modifier = Modifier
+                    .size(240.dp)
+                    .graphicsLayer {
+                        scaleX = glowScaleState.value
+                        scaleY = glowScaleState.value
+                        alpha = glowAlphaState.value
+                    }
+            ) {
+                drawCircle(brush = radialGradientBrush)
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B24).copy(alpha = 0.7f)),
+                border = BorderStroke(1.dp, borderBrush),
+                shape = RoundedCornerShape(28.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 400.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(
+                        progress = transcribingProgress / 100f,
+                        color = emerald,
+                        trackColor = Color(0xFF49454F).copy(alpha = 0.5f),
+                        strokeWidth = 6.dp,
+                        modifier = Modifier.size(72.dp)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = textDeep
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (isKo) "전체 필기 및 AI 가공 진행률: $transcribingProgress%" else "Overall progress: $transcribingProgress%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textMuted
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LinearProgressIndicator(
+                        progress = transcribingProgress / 100f,
+                        color = emerald,
+                        trackColor = Color(0xFF49454F).copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.cancelSermonTranscription(jobId) },
+                        border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.4f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color(0xFFFF5252)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .bounceClickable {
+                                viewModel.cancelSermonTranscription(jobId)
+                            }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isKo) "필기 분석 중단" else "Cancel Transcription",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
         }
     } else if (segments.isEmpty()) {
@@ -492,7 +758,7 @@ fun TranscriptTab(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { editSegmentDialogFor = segment }
+                        .bounceClickable { editSegmentDialogFor = segment }
                         .testTag("segment_box_${segment.id}"),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
                     border = BorderStroke(1.dp, Color(0xFF49454F).copy(alpha = 0.3f)),
@@ -920,7 +1186,7 @@ fun ActionCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .bounceClickable { onClick() }
             .testTag(tag),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
         border = BorderStroke(1.dp, Color(0xFF49454F).copy(alpha = 0.3f)),

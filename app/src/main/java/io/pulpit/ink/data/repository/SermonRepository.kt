@@ -17,6 +17,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
 import java.util.UUID
@@ -108,54 +111,108 @@ class SermonRepository(private val sermonDao: SermonDao) {
             return@withContext false
         }
         val modelManager = WhisperModelManager(context)
-        val modelConfig = WhisperModelConfig.fromKey(selectedModelKey)
+        var modelConfig = WhisperModelConfig.fromKey(selectedModelKey)
+        var effectiveModelKey = selectedModelKey
         if (!modelManager.isModelDownloaded(modelConfig)) {
-            markJobFailed(
-                jobId,
-                if (isKo) "Whisper '${modelConfig.modelKey}' 모델이 설치되어 있지 않습니다. 설정에서 먼저 다운로드해 주세요."
-                else "Whisper '${modelConfig.modelKey}' model is not installed. Please download it from settings first."
-            )
-            return@withContext false
+            // Fallback dynamically to any model that is downloaded (e.g. tiny)
+            val downloadedFallback = WhisperModelConfig.values().firstOrNull { modelManager.isModelDownloaded(it) }
+            if (downloadedFallback != null) {
+                modelConfig = downloadedFallback
+                effectiveModelKey = downloadedFallback.modelKey
+                android.util.Log.i("SermonRepository", "Selected model '$selectedModelKey' is not downloaded. Seamlessly falling back to downloaded model: '$effectiveModelKey'")
+            } else {
+                markJobFailed(
+                    jobId,
+                    if (isKo) "Whisper '${modelConfig.modelKey}' 모델이 설치되어 있지 않습니다. 설정에서 먼저 다운로드해 주세요."
+                    else "Whisper '${modelConfig.modelKey}' model is not installed. Please download it from settings first."
+                )
+                return@withContext false
+            }
         }
 
         // All pre-flight checks passed — claim the job.
         sermonDao.updateJob(job.copy(status = "Transcribing", errorMessage = null))
 
         try {
+            updateProgress(jobId, 10)
             TranscriptionNotificationHelper.showProgressNotification(
                 context, jobId, title, 10,
                 if (isKo) "대기 중..." else "Waiting..."
             )
 
+            updateProgress(jobId, 20)
             TranscriptionNotificationHelper.showProgressNotification(
                 context, jobId, title, 20,
                 if (isKo) "오디오 디코딩 중..." else "Decoding audio..."
             )
 
-            val engine = SpeechToTextEngineFactory.getEngine(context, selectedModelKey)
+            val engine = SpeechToTextEngineFactory.getEngine(context, effectiveModelKey)
 
+            updateProgress(jobId, 40)
             TranscriptionNotificationHelper.showProgressNotification(
                 context, jobId, title, 40,
-                if (isKo) "Whisper AI 분석 중..." else "Running Whisper AI inference..."
+                if (isKo) "음성 필기 분석 중..." else "Running Whisper transcription..."
             )
 
             // Whisper inference is the long pole — without progress feedback the
             // notification appears frozen at 40% for minutes. Map the native 0..100
-            // callback onto the 40..70% slice of the overall job and throttle to
-            // every 5% to avoid notification spam.
-            var lastShown = 40
-            val rawTranscript = engine.transcribe(audioFile, selectedModelKey) { nativePercent ->
-                val overall = 40 + (nativePercent.coerceIn(0, 100) * 30 / 100)
-                if (overall - lastShown >= 5 && overall < 75) {
-                    lastShown = overall
-                    TranscriptionNotificationHelper.showProgressNotification(
-                        context, jobId, title, overall,
-                        if (isKo) "Whisper AI 분석 중... ($nativePercent%)"
-                        else "Running Whisper AI inference... ($nativePercent%)"
-                    )
+            // callback onto the 40..75% slice of the overall job and throttle to
+            // every 1% native change to prevent Binder IPC rate-limiting and make progress smooth.
+            var lastPercent = -1
+            val tickerJob = launch {
+                while (isActive) {
+                    delay(2000L) // Smooth tick every 2 seconds
+                    val current = transcriptionProgress.value[jobId] ?: 40
+                    if (current in 40..73) {
+                        val next = current + 1
+                        updateProgress(jobId, next)
+                        val nativePct = ((next - 40) * 100 / 35).coerceIn(0, 100)
+                        TranscriptionNotificationHelper.showProgressNotification(
+                            context, jobId, title, next,
+                            if (isKo) "음성 필기 분석 중... ($nativePct%)"
+                            else "Running Whisper transcription... ($nativePct%)"
+                        )
+                    }
                 }
             }
 
+            val rawTranscript = try {
+                engine.transcribe(audioFile, effectiveModelKey) { nativePercent ->
+                    when (nativePercent) {
+                        -1 -> {
+                            updateProgress(jobId, 25)
+                            TranscriptionNotificationHelper.showProgressNotification(
+                                context, jobId, title, 25,
+                                if (isKo) "오디오 디코딩 중..." else "Decoding audio..."
+                            )
+                        }
+                        -2 -> {
+                            updateProgress(jobId, 35)
+                            TranscriptionNotificationHelper.showProgressNotification(
+                                context, jobId, title, 35,
+                                if (isKo) "필기 엔진 모델 로딩 중..." else "Loading transcription model..."
+                            )
+                        }
+                        else -> {
+                            val coerced = nativePercent.coerceIn(0, 100)
+                            if (coerced != lastPercent) {
+                                lastPercent = coerced
+                                val overall = 40 + (coerced * 35 / 100)
+                                updateProgress(jobId, overall)
+                                TranscriptionNotificationHelper.showProgressNotification(
+                                    context, jobId, title, overall,
+                                    if (isKo) "음성 필기 분석 중... ($coerced%)"
+                                    else "Running Whisper transcription... ($coerced%)"
+                                )
+                            }
+                        }
+                    }
+                }
+            } finally {
+                tickerJob.cancel()
+            }
+
+            updateProgress(jobId, 75)
             TranscriptionNotificationHelper.showProgressNotification(
                 context, jobId, title, 75,
                 if (isKo) "맞춤법 교정 및 요약/아웃라인 가공 중..." else "Proofreading & structuring outline..."
@@ -185,6 +242,7 @@ class SermonRepository(private val sermonDao: SermonDao) {
                     )
                     writePlaceholderSegment(jobId, job.durationSec, isKo)
                 }
+                updateProgress(jobId, 100)
                 TranscriptionNotificationHelper.showProgressNotification(
                     context, jobId, title, 100,
                     if (isKo) "음성 인식 결과 없음" else "No speech detected"
@@ -221,21 +279,36 @@ class SermonRepository(private val sermonDao: SermonDao) {
                 writeSegments(jobId, job.durationSec, correctedTranscript)
             }
 
+            updateProgress(jobId, 100)
             TranscriptionNotificationHelper.showProgressNotification(
                 context, jobId, finalTitle, 100,
                 if (isKo) "가공 완료!" else "Transcription successful!"
             )
             return@withContext true
         } catch (e: Exception) {
-            withContext(NonCancellable) {
-                markJobFailed(jobId, e.localizedMessage ?: "Transcription failed")
+            val isCancelled = e is kotlinx.coroutines.CancellationException
+            val errorMsg = if (isCancelled) {
+                if (isKo) "사용자가 필기 분석을 중단했습니다." else "Transcription was cancelled by user."
+            } else {
+                e.localizedMessage ?: "Transcription failed"
             }
+            
+            withContext(NonCancellable) {
+                markJobFailed(jobId, errorMsg)
+            }
+            
             TranscriptionNotificationHelper.showProgressNotification(
                 context, jobId, title, 100,
-                if (isKo) "전사 분석 실패" else "Transcription failed"
+                if (isCancelled) {
+                    if (isKo) "필기 분석 중단됨" else "Transcription cancelled"
+                } else {
+                    if (isKo) "필기 분석 실패" else "Transcription failed"
+                }
             )
             if (e is kotlinx.coroutines.CancellationException) throw e
             return@withContext false
+        } finally {
+            clearProgress(jobId)
         }
     }
 
@@ -370,5 +443,22 @@ class SermonRepository(private val sermonDao: SermonDao) {
             ?.trim()
             ?: transcript.take(40)
         return firstSentence.take(40)
+    }
+
+    companion object {
+        private val _transcriptionProgress = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Int>>(emptyMap())
+        val transcriptionProgress: kotlinx.coroutines.flow.StateFlow<Map<String, Int>> = _transcriptionProgress
+
+        fun updateProgress(jobId: String, progress: Int) {
+            val current = _transcriptionProgress.value.toMutableMap()
+            current[jobId] = progress
+            _transcriptionProgress.value = current
+        }
+
+        fun clearProgress(jobId: String) {
+            val current = _transcriptionProgress.value.toMutableMap()
+            current.remove(jobId)
+            _transcriptionProgress.value = current
+        }
     }
 }

@@ -16,10 +16,7 @@ import kotlinx.coroutines.withContext
 /**
  * Process-wide scope that owns long-running transcription work so it survives the
  * AudioRecordingService stopping and the hosting Activity/ViewModel being destroyed.
- *
- * The previous implementation launched transcription on the recording service's own
- * CoroutineScope; `stopSelf()` immediately after triggered `serviceScope.cancel()` and
- * killed the transcription mid-flight, leaving jobs frozen at `Transcribing`.
+ * Supports thread-safe dynamic cancellation of active running transcription jobs.
  */
 object TranscriptionRunner {
     private const val TAG = "TranscriptionRunner"
@@ -33,6 +30,10 @@ object TranscriptionRunner {
     // thrash CPU/memory on mid-range Android devices.
     private val runMutex = Mutex()
 
+    // Thread-safe active job tracking for dynamic cancellation
+    private var activeJobId: String? = null
+    private var activeJob: kotlinx.coroutines.Job? = null
+
     /**
      * Enqueue a transcription job. Returns immediately; the caller must not assume
      * completion timing. Uses the application context so callers (services, activities)
@@ -45,21 +46,62 @@ object TranscriptionRunner {
         modelKey: String
     ) {
         val appContext = context.applicationContext
-        scope.launch {
+        synchronized(this) {
+            // Cancel any existing run if it is for the same job (safeguard)
+            if (activeJobId == jobId) {
+                activeJob?.cancel()
+                activeJobId = null
+                activeJob = null
+            }
+        }
+
+        val coroutineJob = scope.launch {
             runMutex.withLock {
+                synchronized(this@TranscriptionRunner) {
+                    activeJobId = jobId
+                    activeJob = coroutineContext[kotlinx.coroutines.Job]
+                }
+
                 val repository = SermonRepository(AppDatabase.getDatabase(appContext).sermonDao())
                 try {
                     repository.transcribeJob(appContext, jobId, topicHint, modelKey)
                 } catch (t: Throwable) {
                     Log.e(TAG, "Transcription crashed for job $jobId", t)
-                    // The repository handles its own status writes inside a NonCancellable
-                    // cleanup block, but if something escapes (e.g. OOM in native land)
-                    // make sure we don't silently leave the job stuck.
                     withContext(NonCancellable) {
                         repository.markJobFailed(jobId, t.localizedMessage ?: "Transcription crashed")
                     }
+                } finally {
+                    synchronized(this@TranscriptionRunner) {
+                        if (activeJobId == jobId) {
+                            activeJobId = null
+                            activeJob = null
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * Cancel an active running transcription job.
+     */
+    fun cancel(jobId: String) {
+        synchronized(this) {
+            if (activeJobId == jobId) {
+                Log.i(TAG, "Dynamic cancellation requested for active job: $jobId")
+                activeJob?.cancel()
+                activeJobId = null
+                activeJob = null
+            }
+        }
+    }
+
+    /**
+     * Check if a specific job is currently actively transcribing.
+     */
+    fun isTranscribing(jobId: String): Boolean {
+        synchronized(this) {
+            return activeJobId == jobId
         }
     }
 }

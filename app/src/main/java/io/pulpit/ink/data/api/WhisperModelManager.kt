@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -12,7 +14,10 @@ import java.io.InputStream
 
 class WhisperModelManager(private val context: Context) {
     private val TAG = "WhisperModelManager"
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     fun getModelFile(config: WhisperModelConfig): File {
         return File(context.filesDir, config.filename)
@@ -65,12 +70,23 @@ class WhisperModelManager(private val context: Context) {
                         var bytesRead: Int
                         var totalBytesRead = 0L
 
+                        var lastProgress = -1
+                        var lastUpdateTime = 0L
+
                         while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            if (!kotlinx.coroutines.currentCoroutineContext().isActive) {
+                                throw kotlinx.coroutines.CancellationException("Download cancelled")
+                            }
                             outputStream.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
                             if (contentLength > 0) {
                                 val progress = ((totalBytesRead * 100) / contentLength).toInt()
-                                onProgress(progress)
+                                val now = System.currentTimeMillis()
+                                if (progress != lastProgress || now - lastUpdateTime >= 250L) {
+                                    lastProgress = progress
+                                    lastUpdateTime = now
+                                    onProgress(progress)
+                                }
                             }
                         }
                         outputStream.flush()

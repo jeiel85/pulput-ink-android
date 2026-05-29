@@ -1,5 +1,6 @@
 package io.pulpit.ink.ui.audio
 
+import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -10,7 +11,8 @@ import java.nio.ByteOrder
 
 /**
  * Decodes compressed audio files (like .m4a AAC) into 16kHz mono Float PCM arrays.
- * This format is strictly required by the local Whisper.cpp inference engine.
+ * Applies software-based DSP filters (IIR highpass, lowpass, and windowed RMS speech compressor)
+ * matching the user's desktop audio enhancement presets to maximize Whisper transcription accuracy.
  */
 object AudioDecoder {
     private const val TAG = "AudioDecoder"
@@ -18,8 +20,9 @@ object AudioDecoder {
 
     /**
      * Decode an audio file and resample it to 16kHz mono float array in the range [-1.0f, 1.0f].
+     * Applies the selected audio preprocessing preset from SharedPreferences.
      */
-    fun decodeToPcm(audioFile: File): FloatArray {
+    fun decodeToPcm(audioFile: File, context: Context): FloatArray {
         if (!audioFile.exists() || audioFile.length() == 0L) {
             Log.e(TAG, "Audio file is empty or missing: ${audioFile.absolutePath}")
             return FloatArray(0)
@@ -49,79 +52,114 @@ object AudioDecoder {
             }
 
             extractor.selectTrack(trackIndex)
-            val mime = format.getString(MediaFormat.KEY_MIME)!!
-            val sourceSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val sourceChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+            codec = MediaCodec.createDecoderByType(mime)
+            codec.configure(format, null, null, 0)
+            codec.start()
 
-            val localCodec = MediaCodec.createDecoderByType(mime)
-            codec = localCodec
-            localCodec.configure(format, null, null, 0)
-            localCodec.start()
-
-            val allSamples = ArrayList<Short>()
-            val bufferInfo = MediaCodec.BufferInfo()
-            var isExtractorEOS = false
+            val info = MediaCodec.BufferInfo()
+            var allSamples = ArrayList<Short>()
+            var isInputEOS = false
             var isDecoderEOS = false
-            val timeoutUs = 10000L
+
+            val sourceChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+            val sourceSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            Log.i(TAG, "Starting decoding. File: ${audioFile.name}, channels: $sourceChannels, sample rate: $sourceSampleRate")
+
+            var decodedChannels = sourceChannels
+            var decodedSampleRate = sourceSampleRate
 
             while (!isDecoderEOS) {
-                if (!isExtractorEOS) {
-                    val inputBufferIndex = localCodec.dequeueInputBuffer(timeoutUs)
+                if (!isInputEOS) {
+                    val inputBufferIndex = codec.dequeueInputBuffer(10000)
                     if (inputBufferIndex >= 0) {
-                        val inputBuffer = localCodec.getInputBuffer(inputBufferIndex)!!
-                        val sampleSize = extractor.readSampleData(inputBuffer, 0)
-
-                        if (sampleSize < 0) {
-                            localCodec.queueInputBuffer(
-                                inputBufferIndex, 0, 0, 0L,
-                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                            )
-                            isExtractorEOS = true
-                        } else {
-                            localCodec.queueInputBuffer(
-                                inputBufferIndex, 0, sampleSize, extractor.sampleTime, 0
-                            )
-                            extractor.advance()
+                        val inputBuffer = codec.getInputBuffer(inputBufferIndex)
+                        if (inputBuffer != null) {
+                            val sampleSize = extractor.readSampleData(inputBuffer, 0)
+                            if (sampleSize < 0) {
+                                codec.queueInputBuffer(inputBufferIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                isInputEOS = true
+                            } else {
+                                codec.queueInputBuffer(inputBufferIndex, 0, sampleSize, extractor.sampleTime, 0)
+                                extractor.advance()
+                            }
                         }
                     }
                 }
 
-                val outputBufferIndex = localCodec.dequeueOutputBuffer(bufferInfo, timeoutUs)
+                val outputBufferIndex = codec.dequeueOutputBuffer(info, 10000)
                 if (outputBufferIndex >= 0) {
-                    val outputBuffer = localCodec.getOutputBuffer(outputBufferIndex)!!
-                    outputBuffer.order(ByteOrder.nativeOrder())
+                    val outputBuffer = codec.getOutputBuffer(outputBufferIndex)
+                    if (outputBuffer != null && info.size > 0) {
+                        outputBuffer.position(info.offset)
+                        outputBuffer.order(ByteOrder.nativeOrder())
+                        
+                        // Copy samples based on layout
+                        val count = info.size / 2 // 16-bit short samples
+                        val pcmShorts = ShortArray(count)
+                        outputBuffer.asShortBuffer().get(pcmShorts)
 
-                    val shortBuffer = outputBuffer.asShortBuffer()
-                    val count = shortBuffer.remaining()
-                    
-                    // M4A streams might be stereo; we downmix to mono by averaging channels
-                    if (sourceChannels == 2) {
-                        for (i in 0 until count step 2) {
-                            if (i + 1 < count) {
-                                val left = shortBuffer.get(i).toInt()
-                                val right = shortBuffer.get(i + 1).toInt()
-                                allSamples.add(((left + right) / 2).toShort())
+                        // Downmix dynamically based on active decoded channels in the PCM stream
+                        if (decodedChannels > 1) {
+                            for (i in 0 until count step decodedChannels) {
+                                var sum = 0
+                                for (c in 0 until decodedChannels) {
+                                    sum += pcmShorts[i + c]
+                                }
+                                allSamples.add((sum / decodedChannels).toShort())
+                            }
+                        } else {
+                            for (s in pcmShorts) {
+                                allSamples.add(s)
                             }
                         }
-                    } else {
-                        // Already mono or other, just read sequentially
-                        for (i in 0 until count) {
-                            allSamples.add(shortBuffer.get(i))
-                        }
                     }
+                    codec.releaseOutputBuffer(outputBufferIndex, false)
 
-                    localCodec.releaseOutputBuffer(outputBufferIndex, false)
-
-                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                    if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                        Log.d(TAG, "Decoder output EOS reached.")
                         isDecoderEOS = true
                     }
                 } else if (outputBufferIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    Log.d(TAG, "Decoder output format changed: ${localCodec.outputFormat}")
+                    val newFormat = codec.outputFormat
+                    if (newFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                        decodedChannels = newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    }
+                    if (newFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                        decodedSampleRate = newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    }
+                    Log.d(TAG, "Decoder output format changed: $newFormat, channels: $decodedChannels, rate: $decodedSampleRate")
                 }
             }
 
-            // Resample & normalize the raw PCM short samples
-            return resampleAndNormalize(allSamples.toShortArray(), sourceSampleRate)
+            // 1. Resample & normalize using actual decoded sample rate
+            val rawPcm = resampleAndNormalize(allSamples.toShortArray(), decodedSampleRate)
+            
+            // 2. Read selected audio enhancement preset from SharedPreferences
+            val prefs = context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
+            val preset = prefs.getString("selected_audio_preset", "sermon") ?: "sermon"
+            
+            Log.i(TAG, "Applying audio enhancement DSP preset: '$preset' to PCM data (size: ${rawPcm.size})")
+            val processedPcm = when (preset) {
+                "stt_basic" -> {
+                    val hp = applyHighPassFilter(rawPcm, 80f, TARGET_SAMPLE_RATE.toFloat())
+                    applyLowPassFilter(hp, 7800f, TARGET_SAMPLE_RATE.toFloat())
+                }
+                "sermon" -> {
+                    val hp = applyHighPassFilter(rawPcm, 80f, TARGET_SAMPLE_RATE.toFloat())
+                    val lp = applyLowPassFilter(hp, 7500f, TARGET_SAMPLE_RATE.toFloat())
+                    applyDynamicGain(lp, TARGET_SAMPLE_RATE.toFloat(), maxGain = 4.0f, minRms = 0.01f)
+                }
+                "noisy" -> {
+                    val hp = applyHighPassFilter(rawPcm, 100f, TARGET_SAMPLE_RATE.toFloat())
+                    val lp = applyLowPassFilter(hp, 6500f, TARGET_SAMPLE_RATE.toFloat())
+                    applyDynamicGain(lp, TARGET_SAMPLE_RATE.toFloat(), maxGain = 5.0f, minRms = 0.02f)
+                }
+                else -> rawPcm // "none"
+            }
+            
+            Log.d(TAG, "Audio enhancement completed. Final samples: ${processedPcm.size}")
+            return processedPcm
 
         } catch (e: Exception) {
             Log.e(TAG, "Error decoding audio file ${audioFile.name}", e)
@@ -172,5 +210,117 @@ object AudioDecoder {
             }
         }
         return outputSamples
+    }
+
+    /**
+     * 2nd-order IIR Butterworth Highpass Filter to remove sub-bass rumble (< 80Hz/100Hz).
+     */
+    private fun applyHighPassFilter(pcm: FloatArray, cutoff: Float, sampleRate: Float): FloatArray {
+        val omega = (2.0 * Math.PI * cutoff / sampleRate).toFloat()
+        val gamma = Math.tan(omega / 2.0).toFloat()
+        val sqrt2 = Math.sqrt(2.0).toFloat()
+        
+        val d = gamma * gamma + sqrt2 * gamma + 1f
+        val b0 = 1f / d
+        val b1 = -2f / d
+        val b2 = 1f / d
+        val a1 = 2f * (gamma * gamma - 1f) / d
+        val a2 = (gamma * gamma - sqrt2 * gamma + 1f) / d
+        
+        val output = FloatArray(pcm.size)
+        var x1 = 0f
+        var x2 = 0f
+        var y1 = 0f
+        var y2 = 0f
+        
+        for (i in pcm.indices) {
+            val x = pcm[i]
+            val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            
+            x2 = x1
+            x1 = x
+            y2 = y1
+            y1 = y
+            
+            output[i] = y
+        }
+        return output
+    }
+
+    /**
+     * 2nd-order IIR Butterworth Lowpass Filter to remove high-frequency static hiss (> 6.5kHz/7.5kHz).
+     */
+    private fun applyLowPassFilter(pcm: FloatArray, cutoff: Float, sampleRate: Float): FloatArray {
+        val omega = (2.0 * Math.PI * cutoff / sampleRate).toFloat()
+        val gamma = Math.tan(omega / 2.0).toFloat()
+        val sqrt2 = Math.sqrt(2.0).toFloat()
+        
+        val d = gamma * gamma + sqrt2 * gamma + 1f
+        val b0 = (gamma * gamma) / d
+        val b1 = (2f * gamma * gamma) / d
+        val b2 = (gamma * gamma) / d
+        val a1 = 2f * (gamma * gamma - 1f) / d
+        val a2 = (gamma * gamma - sqrt2 * gamma + 1f) / d
+        
+        val output = FloatArray(pcm.size)
+        var x1 = 0f
+        var x2 = 0f
+        var y1 = 0f
+        var y2 = 0f
+        
+        for (i in pcm.indices) {
+            val x = pcm[i]
+            val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            
+            x2 = x1
+            x1 = x
+            y2 = y1
+            y1 = y
+            
+            output[i] = y
+        }
+        return output
+    }
+
+    /**
+     * Sliding window Speech Gain dynamic compressor/limiter to balance volume dynamically.
+     */
+    private fun applyDynamicGain(
+        pcm: FloatArray, 
+        sampleRate: Float, 
+        maxGain: Float, 
+        minRms: Float
+    ): FloatArray {
+        val output = FloatArray(pcm.size)
+        val windowSize = (sampleRate * 0.5f).toInt() // 500ms sliding window
+        if (pcm.size < windowSize) return pcm.clone()
+        
+        var smoothGain = 1.0f
+        val targetRms = 0.15f // target RMS level for speech
+        val alpha = 0.05f     // gain smoothing factor
+        
+        for (i in pcm.indices step (windowSize / 2)) {
+            val end = (i + windowSize).coerceAtMost(pcm.size)
+            val len = end - i
+            if (len <= 0) break
+            
+            var sumSquare = 0f
+            for (j in i until end) {
+                sumSquare += pcm[j] * pcm[j]
+            }
+            val rms = Math.sqrt((sumSquare / len).toDouble()).toFloat()
+            
+            val targetGain = when {
+                rms < minRms -> 1.0f // don't amplify silence noise
+                else -> (targetRms / rms).coerceIn(1.0f, maxGain)
+            }
+            
+            for (j in i until end) {
+                smoothGain += alpha * (targetGain - smoothGain)
+                output[j] = (pcm[j] * smoothGain).coerceIn(-1.0f, 1.0f)
+            }
+        }
+        
+        return output
     }
 }

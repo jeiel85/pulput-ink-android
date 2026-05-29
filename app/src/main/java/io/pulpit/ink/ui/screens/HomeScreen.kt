@@ -18,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -30,8 +32,15 @@ import io.pulpit.ink.R
 import io.pulpit.ink.data.model.SermonJob
 import io.pulpit.ink.data.api.WhisperModelConfig
 import io.pulpit.ink.ui.viewmodel.SermonViewModel
+import io.pulpit.ink.ui.theme.bounceClickable
 import java.text.SimpleDateFormat
 import java.util.*
+
+enum class SettingsScreen {
+    MAIN,
+    ENGINE_MODELS,
+    PREPROCESSING
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -45,6 +54,14 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     var showDeleteConfirmDialog by remember { mutableStateOf<SermonJob?>(null) }
     var showWhisperManager by remember { mutableStateOf(false) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importAudioFile(uri)
+        }
+    }
 
     // Elegant Dark Theme Palette
     val deepInk = Color(0xFFE6E1E5) // Clean premium white/silver
@@ -83,6 +100,17 @@ fun HomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { filePickerLauncher.launch("audio/*") },
+                        modifier = Modifier.testTag("import_audio_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = stringResource(R.string.import_audio),
+                            tint = primaryEmerald,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
                     IconButton(
                         onClick = { showWhisperManager = true },
                         modifier = Modifier.testTag("whisper_settings_button")
@@ -293,20 +321,48 @@ fun HomeScreen(
         val downloadStates by viewModel.downloadState.collectAsState()
         val downloadProgresses by viewModel.downloadProgress.collectAsState()
         val selectedModel by viewModel.selectedWhisperModel.collectAsState()
+        val hapticEnabled by viewModel.isHapticFeedbackEnabled.collectAsState()
+        val selectedPreset by viewModel.selectedAudioPreset.collectAsState()
+        val isKo = java.util.Locale.getDefault().language == "ko"
+
+        var currentScreen by remember { mutableStateOf(SettingsScreen.MAIN) }
 
         AlertDialog(
-            onDismissRequest = { showWhisperManager = false },
+            onDismissRequest = { 
+                showWhisperManager = false 
+                currentScreen = SettingsScreen.MAIN
+            },
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.SettingsVoice,
-                        contentDescription = null,
-                        tint = primaryEmerald,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (currentScreen != SettingsScreen.MAIN) {
+                        IconButton(
+                            onClick = { currentScreen = SettingsScreen.MAIN },
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = primaryEmerald
+                            )
+                        }
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.SettingsVoice,
+                            contentDescription = null,
+                            tint = primaryEmerald,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     Text(
-                        text = stringResource(R.string.whisper_manager_title),
+                        text = when (currentScreen) {
+                            SettingsScreen.MAIN -> if (isKo) "음성 필기 & 고급 설정" else "Voice & Advanced Settings"
+                            SettingsScreen.ENGINE_MODELS -> if (isKo) "필기 엔진 모델 설정" else "Engine Model Settings"
+                            SettingsScreen.PREPROCESSING -> if (isKo) "음성 전처리 필터 설정" else "Audio Preprocessing"
+                        },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = deepInk
@@ -314,195 +370,458 @@ fun HomeScreen(
                 }
             },
             text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Storage usage card
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.storage_used),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = softSlate
-                            )
-                            Text(
-                                text = formatBytesToMB(storageUsage),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = primaryEmerald
-                            )
+                AnimatedContent(
+                    targetState = currentScreen,
+                    transitionSpec = {
+                        if (targetState == SettingsScreen.MAIN) {
+                            slideInHorizontally { -it } + fadeIn() togetherWith
+                                    slideOutHorizontally { it } + fadeOut()
+                        } else {
+                            slideInHorizontally { it } + fadeIn() togetherWith
+                                    slideOutHorizontally { -it } + fadeOut()
                         }
-                    }
-
-                    // Model list selection
-                    WhisperModelConfig.values().forEach { config ->
-                        val state = downloadStates[config.modelKey] ?: "not_downloaded"
-                        val progress = downloadProgresses[config.modelKey] ?: 0
-                        val isSelected = selectedModel == config.modelKey && state == "downloaded"
-
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) Color(0xFF2E2445) else Color(0xFF211F24)
-                            ),
-                            border = BorderStroke(
-                                width = if (isSelected) 2.dp else 1.dp,
-                                color = if (isSelected) primaryEmerald else Color(0xFF49454F).copy(alpha = 0.5f)
-                            ),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Top
+                    },
+                    label = "SettingsDepthTransition"
+                ) { screen ->
+                    when (screen) {
+                        SettingsScreen.MAIN -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 450.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                val currentModelLabel = when (selectedModel) {
+                                    "tiny" -> if (isKo) "Whisper Tiny (초경량)" else "Whisper Tiny"
+                                    "base" -> if (isKo) "Whisper Base (표준)" else "Whisper Base"
+                                    "small" -> if (isKo) "Whisper Small (고정밀)" else "Whisper Small"
+                                    else -> if (isKo) "선택 안 됨" else "Not Selected"
+                                }
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .bounceClickable { currentScreen = SettingsScreen.ENGINE_MODELS }
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = stringResource(config.titleResId),
+                                                text = if (isKo) "필기 엔진 모델 설정" else "Engine Models",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold,
                                                 color = deepInk
                                             )
-                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Spacer(modifier = Modifier.height(4.dp))
                                             Text(
-                                                text = "(${config.sizeDisplay})",
+                                                text = if (isKo) {
+                                                    "현재 모델: $currentModelLabel • 저장소: ${formatBytesToMB(storageUsage)} 사용"
+                                                } else {
+                                                    "Model: $currentModelLabel • Storage: ${formatBytesToMB(storageUsage)}"
+                                                },
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = softSlate
                                             )
                                         }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = stringResource(config.descResId),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = softSlate,
-                                            lineHeight = 16.sp
+                                        Icon(
+                                            imageVector = Icons.Default.ChevronRight,
+                                            contentDescription = "Navigate",
+                                            tint = primaryEmerald,
+                                            modifier = Modifier.size(24.dp)
                                         )
-                                    }
-
-                                    // Active Selected Badge
-                                    if (isSelected) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(Color(0xFF0F5234))
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.selected_label),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color(0xFFA7F3D0),
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                // Operations Action panel
-                                when (state) {
-                                    "downloaded" -> {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            if (!isSelected) {
-                                                Button(
-                                                    onClick = { viewModel.selectWhisperModel(config.modelKey) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = primaryEmerald),
-                                                    shape = RoundedCornerShape(12.dp),
-                                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                                                    modifier = Modifier.height(32.dp)
-                                                ) {
-                                                    Text(
-                                                        text = stringResource(R.string.select_label),
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = Color(0xFF381E72)
-                                                    )
-                                                }
-                                            } else {
-                                                Spacer(modifier = Modifier.width(1.dp))
-                                            }
-
-                                            // Delete model file button
-                                            IconButton(
-                                                onClick = { viewModel.deleteWhisperModel(config.modelKey) },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Delete,
-                                                    contentDescription = "Delete Model",
-                                                    tint = MaterialTheme.colorScheme.error,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                    "downloading" -> {
-                                        Column(modifier = Modifier.fillMaxWidth()) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text(
-                                                    text = stringResource(R.string.downloading, progress),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = primaryEmerald
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(6.dp))
-                                            LinearProgressIndicator(
-                                                progress = progress / 100f,
-                                                color = primaryEmerald,
-                                                trackColor = Color(0xFF334155),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(6.dp)
-                                                    .clip(RoundedCornerShape(3.dp))
+                                val currentPresetLabel = when (selectedPreset) {
+                                    "none" -> if (isKo) "전처리 없음" else "None"
+                                    "stt_basic" -> if (isKo) "STT 기본 최적화" else "Basic"
+                                    "sermon" -> if (isKo) "설교 최적화 (권장)" else "Sermon (Recommended)"
+                                    "noisy" -> if (isKo) "강력 노이즈 감쇄" else "Heavy Noise"
+                                    else -> if (isKo) "선택 안 됨" else "Not Selected"
+                                }
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .bounceClickable { currentScreen = SettingsScreen.PREPROCESSING }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (isKo) "음성 전처리 필터 설정" else "Audio Preprocessing",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = deepInk
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = if (isKo) "현재 적용: $currentPresetLabel" else "Preset: $currentPresetLabel",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = softSlate
                                             )
                                         }
+                                        Icon(
+                                            imageVector = Icons.Default.ChevronRight,
+                                            contentDescription = "Navigate",
+                                            tint = primaryEmerald,
+                                            modifier = Modifier.size(24.dp)
+                                        )
                                     }
-                                    else -> {
-                                        // Not downloaded download button
-                                        Button(
-                                            onClick = { viewModel.downloadWhisperModel(config.modelKey) },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = Color(0xFF2B2930)
-                                            ),
-                                            border = BorderStroke(1.dp, Color(0xFF49454F)),
-                                            shape = RoundedCornerShape(12.dp),
-                                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                                            modifier = Modifier.height(32.dp)
-                                        ) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Download,
-                                                    contentDescription = null,
-                                                    tint = primaryEmerald,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = stringResource(R.string.download_button, config.sizeDisplay),
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = primaryEmerald
-                                                )
+                                }
+
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (isKo) "터치 햅틱 피드백" else "Touch Haptic Feedback",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = deepInk
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = if (isKo) "버튼을 클릭할 때 모래알 같은 미세 정밀 진동을 제공합니다." else "Provides tiny micro-haptic clicks when tapping buttons.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = softSlate
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Switch(
+                                            checked = hapticEnabled,
+                                            onCheckedChange = { viewModel.setHapticFeedbackEnabled(it) },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = primaryEmerald,
+                                                checkedTrackColor = primaryEmerald.copy(alpha = 0.5f)
+                                            )
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HorizontalDivider(color = Color(0xFF49454F).copy(alpha = 0.4f))
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Lock,
+                                        contentDescription = null,
+                                        tint = primaryEmerald,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.whisper_info),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = deepInk,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            }
+                        }
+                        SettingsScreen.ENGINE_MODELS -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 450.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.storage_used),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = softSlate
+                                        )
+                                        Text(
+                                            text = formatBytesToMB(storageUsage),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = primaryEmerald
+                                        )
+                                    }
+                                }
+
+                                WhisperModelConfig.values().forEach { config ->
+                                    val state = downloadStates[config.modelKey] ?: "not_downloaded"
+                                    val progress = downloadProgresses[config.modelKey] ?: 0
+                                    val isSelected = selectedModel == config.modelKey && state == "downloaded"
+
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (isSelected) Color(0xFF2E2445) else Color(0xFF211F24)
+                                        ),
+                                        border = BorderStroke(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = if (isSelected) primaryEmerald else Color(0xFF49454F).copy(alpha = 0.5f)
+                                        ),
+                                        shape = RoundedCornerShape(20.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.Top
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = stringResource(config.titleResId),
+                                                            style = MaterialTheme.typography.titleMedium,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = deepInk
+                                                        )
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "(${config.sizeDisplay})",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = softSlate
+                                                        )
+                                                    }
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = stringResource(config.descResId),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = softSlate,
+                                                        lineHeight = 16.sp
+                                                    )
+                                                }
+
+                                                if (isSelected) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(8.dp))
+                                                            .background(Color(0xFF0F5234))
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = stringResource(R.string.selected_label),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = Color(0xFFA7F3D0),
+                                                            fontWeight = FontWeight.Bold
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(12.dp))
+
+                                            when (state) {
+                                                "downloaded" -> {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        if (!isSelected) {
+                                                            Button(
+                                                                onClick = { viewModel.selectWhisperModel(config.modelKey) },
+                                                                colors = ButtonDefaults.buttonColors(containerColor = primaryEmerald),
+                                                                shape = RoundedCornerShape(12.dp),
+                                                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                                                                modifier = Modifier.height(32.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = stringResource(R.string.select_label),
+                                                                    style = MaterialTheme.typography.labelMedium,
+                                                                    color = Color(0xFF381E72)
+                                                                )
+                                                            }
+                                                        } else {
+                                                            Spacer(modifier = Modifier.width(1.dp))
+                                                        }
+
+                                                        IconButton(
+                                                            onClick = { viewModel.deleteWhisperModel(config.modelKey) },
+                                                            modifier = Modifier.size(36.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete,
+                                                                contentDescription = "Delete Model",
+                                                                tint = MaterialTheme.colorScheme.error,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                "downloading" -> {
+                                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = stringResource(R.string.downloading, progress),
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = primaryEmerald
+                                                            )
+                                                            TextButton(
+                                                                onClick = { viewModel.cancelWhisperModelDownload(config.modelKey) },
+                                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                                modifier = Modifier.height(28.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = if (isKo) "다운로드 취소" else "Cancel",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    color = MaterialTheme.colorScheme.error
+                                                                )
+                                                            }
+                                                        }
+                                                        Spacer(modifier = Modifier.height(6.dp))
+                                                        LinearProgressIndicator(
+                                                            progress = progress / 100f,
+                                                            color = primaryEmerald,
+                                                            trackColor = Color(0xFF334155),
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .height(6.dp)
+                                                                .clip(RoundedCornerShape(3.dp))
+                                                        )
+                                                    }
+                                                }
+                                                else -> {
+                                                    Button(
+                                                        onClick = { viewModel.downloadWhisperModel(config.modelKey) },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2B2930)),
+                                                        border = BorderStroke(1.dp, Color(0xFF49454F)),
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(32.dp)
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Download,
+                                                                contentDescription = null,
+                                                                tint = primaryEmerald,
+                                                                modifier = Modifier.size(14.dp)
+                                                            )
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text(
+                                                                text = stringResource(R.string.download_button, config.sizeDisplay),
+                                                                style = MaterialTheme.typography.labelMedium,
+                                                                color = primaryEmerald
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        SettingsScreen.PREPROCESSING -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 450.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2B2930)),
+                                    shape = RoundedCornerShape(16.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text(
+                                            text = if (isKo) "음성 전처리 필터 설정" else "Audio Preprocessing Preset",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = deepInk
+                                        )
+                                        Text(
+                                            text = if (isKo) "Whisper 전사 품질을 높이기 위해 디코딩 시점의 오디오 잡음과 주파수를 보정합니다." else "Enhances Whisper transcription accuracy by preprocessing room reverb, volume, and static noise.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = softSlate,
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                                        )
+
+                                        val presetsList = listOf(
+                                            Triple("none", if (isKo) "전처리 없음" else "None", if (isKo) "기본 포맷 변환만 수행" else "Raw Audio"),
+                                            Triple("stt_basic", if (isKo) "STT 기본 최적화" else "Basic", if (isKo) "저역/고역 대역 차단 필터" else "Band Filter"),
+                                            Triple("sermon", if (isKo) "설교 최적화 (권장)" else "Sermon", if (isKo) "소음 차단 및 음성 강도 증폭" else "Voice Boost"),
+                                            Triple("noisy", if (isKo) "강력 노이즈 감쇄" else "Noisy", if (isKo) "주변 기계 소음 제거용 강력 필터" else "Heavy Noise")
+                                        )
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            presetsList.forEach { (presetKey, titleText, descText) ->
+                                                val isSelected = selectedPreset == presetKey
+                                                Surface(
+                                                    onClick = { viewModel.setSelectedAudioPreset(presetKey) },
+                                                    shape = RoundedCornerShape(12.dp),
+                                                    color = if (isSelected) primaryEmerald.copy(alpha = 0.15f) else Color.Transparent,
+                                                    border = BorderStroke(
+                                                        width = 1.dp,
+                                                        color = if (isSelected) primaryEmerald else Color(0xFF49454F)
+                                                    ),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        RadioButton(
+                                                            selected = isSelected,
+                                                            onClick = { viewModel.setSelectedAudioPreset(presetKey) },
+                                                            colors = RadioButtonDefaults.colors(selectedColor = primaryEmerald)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = titleText,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = if (isSelected) primaryEmerald else deepInk
+                                                            )
+                                                            Text(
+                                                                text = descText,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = if (isSelected) primaryEmerald.copy(alpha = 0.8f) else softSlate,
+                                                                modifier = Modifier.padding(top = 2.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -510,33 +829,14 @@ fun HomeScreen(
                             }
                         }
                     }
-
-                    HorizontalDivider(color = Color(0xFF49454F).copy(alpha = 0.4f))
-
-                    // Offline guarantee message
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = primaryEmerald,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.whisper_info),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = deepInk,
-                            lineHeight = 16.sp
-                        )
-                    }
                 }
             },
             confirmButton = {
                 Button(
-                    onClick = { showWhisperManager = false },
+                    onClick = { 
+                        showWhisperManager = false 
+                        currentScreen = SettingsScreen.MAIN
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = primaryEmerald)
                 ) {
                     Text(
@@ -566,9 +866,9 @@ fun SermonItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
+            .bounceClickable(
+                onLongClick = onLongClick,
+                onClick = onClick
             )
             .testTag("sermon_card_${job.id}"),
         colors = CardDefaults.cardColors(containerColor = inkBack),

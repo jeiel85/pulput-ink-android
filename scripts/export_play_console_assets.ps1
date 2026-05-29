@@ -59,21 +59,42 @@ $notesTarget = Join-Path $buildDir "PulpitInk-v$Version-vc$versionCode-release-n
 # 4. Generate Combined Release Notes
 $combinedNotes = ""
 if (Test-Path $notesKoSource) {
-  $koContent = Get-Content $notesKoSource -Raw
+  $koContent = Get-Content $notesKoSource -Encoding utf8 -Raw
   $combinedNotes += "<ko-KR>`n$($koContent.Trim())`n</ko-KR>`n"
 } else {
   Write-Warning "한국어 출시 노트가 존재하지 않습니다: $notesKoSource"
 }
 
 if (Test-Path $notesEnSource) {
-  $enContent = Get-Content $notesEnSource -Raw
+  $enContent = Get-Content $notesEnSource -Encoding utf8 -Raw
   $combinedNotes += "`n<en-US>`n$($enContent.Trim())`n</en-US>`n"
 } else {
   Write-Warning "영어 출시 노트가 존재하지 않습니다: $notesEnSource"
 }
 
 if ($combinedNotes -ne "") {
-  Set-Content -Path $notesTarget -Value $combinedNotes -Encoding utf8
+  # Play Console hard limit: 500 Unicode chars per locale block (excluding tags).
+  # Over-limit text is silently truncated by Play Console — abort export instead
+  # of letting a bad file reach the desktop.
+  $localePattern = '<(ko-KR|en-US|ja-JP|zh-CN|zh-TW)>([\s\S]*?)</\1>'
+  $violations = @()
+  foreach ($match in [regex]::Matches($combinedNotes, $localePattern)) {
+      $locale = $match.Groups[1].Value
+      $body = $match.Groups[2].Value.Trim()
+      $len = $body.Length
+      $status = if ($len -gt 500) { 'OVER' } else { 'OK' }
+      Write-Host ("  {0,-7}  {1,4} / 500  {2}" -f $locale, $len, $status)
+      if ($len -gt 500) {
+          $violations += "$locale ($len chars, $($len - 500) over)"
+      }
+  }
+  if ($violations.Count -gt 0) {
+      throw "Play Console release notes exceed the 500-character limit per locale: " +
+          ($violations -join ', ') +
+          ". Trim before exporting."
+  }
+
+  [System.IO.File]::WriteAllText($notesTarget, $combinedNotes)
   Write-Host "통합 출시 노트 내보내기 완료: $notesTarget"
 }
 

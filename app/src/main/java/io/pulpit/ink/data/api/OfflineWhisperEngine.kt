@@ -41,7 +41,8 @@ class OfflineWhisperEngine(private val context: Context) : SpeechToTextEngine {
 
         // 3. Decode compressed audio (.m4a) to raw PCM Float array
         Log.d(TAG, "Decoding audio file to PCM...")
-        val pcmData = AudioDecoder.decodeToPcm(audioFile)
+        onInferenceProgress?.invoke(-1)
+        val pcmData = AudioDecoder.decodeToPcm(audioFile, context)
         if (pcmData.isEmpty()) {
             // Treat as a valid-but-silent recording instead of erroring out — a brand
             // new sermon job stuck at "Failed" purely because the user tapped stop
@@ -53,6 +54,7 @@ class OfflineWhisperEngine(private val context: Context) : SpeechToTextEngine {
 
         // 4. Initialize native Whisper context
         Log.d(TAG, "Initializing Whisper native context with model: ${modelFile.name}")
+        onInferenceProgress?.invoke(-2)
         val contextPtr = WhisperLib.initContext(modelFile.absolutePath)
         if (contextPtr == 0L) {
             throw IllegalStateException("Failed to initialize native Whisper context with model: ${modelFile.absolutePath}")

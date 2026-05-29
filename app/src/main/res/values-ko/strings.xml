@@ -1,21 +1,21 @@
 <resources>
     <string name="app_name">Pulpit Ink</string>
     <string name="app_title">Pulpit Ink</string>
-    <string name="app_subtitle">모바일 설교 비서 및 AI 필기 도구</string>
+    <string name="app_subtitle">모바일 설교 비서 및 필기/요약 도구</string>
     <string name="record_sermon">설교 녹음</string>
     <string name="search_placeholder">설교, 성경 구절 또는 태그 검색...</string>
     <string name="empty_pulpit_title">설교 보관함이 비어 있습니다</string>
     <string name="empty_search_title">일치하는 설교가 없습니다</string>
-    <string name="empty_pulpit_desc">아래의 \'설교 녹음\' 버튼을 눌러 설교 음성을 기록하고, 성경 구절을 분석하며, AI 아웃라인 생성을 시작해 보세요.</string>
+    <string name="empty_pulpit_desc">아래의 \'설교 녹음\' 버튼을 눌러 설교 음성을 기록하고, 성경 구절을 분석하며, 설교 개요서 생성을 시작해 보세요.</string>
     <string name="empty_search_desc">검색어 나 키워드를 변경하여 녹음 및 필기된 노트를 다시 찾아보세요.</string>
     <string name="delete_dialog_title">설교 기록을 삭제하시겠습니까?</string>
-    <string name="delete_dialog_desc">\'%1$s\' 설교를 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, 녹음 파일 및 관련된 모든 초안, 요약본, AI 개요서가 함께 삭제됩니다.</string>
+    <string name="delete_dialog_desc">\'%1$s\' 설교를 삭제하시겠습니까? 이 작업은 되돌릴 수 없으며, 녹음 파일 및 관련된 모든 초안, 요약본, 설교 개요서가 함께 삭제됩니다.</string>
     <string name="delete">삭제</string>
     <string name="cancel">취소</string>
     
     <!-- Status Badges -->
     <string name="status_recording">녹음 중</string>
-    <string name="status_transcribing">AI 동기화 중</string>
+    <string name="status_transcribing">필기 분석 중</string>
     <string name="status_done">필기 완료</string>
     <string name="status_failed">오류</string>
     <string name="status_queue">대기 중</string>
@@ -25,10 +25,10 @@
     <string name="recording_status_recording">설교 음성 녹음 중...</string>
     <string name="recording_status_configure">설교 메타데이터 설정</string>
     <string name="recording_mic_live">마이크가 켜져 있습니다. 은혜로운 말씀을 자유롭게 전하세요.</string>
-    <string name="recording_configure_desc">AI 필기의 정확도를 높이기 위해 설교 제목과 핵심 신학적 주제를 입력해 주세요.</string>
+    <string name="recording_configure_desc">필기 노트의 정확도를 높이기 위해 설교 제목과 핵심 신학적 주제를 입력해 주세요.</string>
     <string name="sermon_title_label">설교 제목</string>
     <string name="sermon_title_placeholder">예: 참된 안식과 구원의 확신</string>
-    <string name="sermon_topic_label">신학적 핵심 주제 (AI 동적 힌트)</string>
+    <string name="sermon_topic_label">신학적 핵심 주제 (동적 힌트)</string>
     <string name="sermon_topic_placeholder">예: 은혜, 용서, 탕자의 비유, 믿음...</string>
     <string name="tap_to_start_recording">터치하여 설교 녹음을 시작합니다</string>
     <string name="discard">취소</string>
@@ -38,19 +38,19 @@
     <string name="rec_saved">녹음이 저장되었습니다. 필기를 시작합니다...</string>
     <string name="rec_complete">설교 필기 및 동기화가 완료되었습니다!</string>
     <string name="rec_removed">설교 기록이 보관함에서 제거되었습니다.</string>
-    <string name="transcription_failed">전사 처리에 실패했습니다. 로컬 모델 또는 기기 용량을 확인해주세요.</string>
-    <string name="toast_proofreading">전사문을 정리하고 있습니다…</string>
-    <string name="toast_proofread_success">전사문 정리가 완료되었습니다.</string>
+    <string name="transcription_failed">필기 노트 작성에 실패했습니다. 로컬 모델 또는 기기 용량을 확인해 주세요.</string>
+    <string name="toast_proofreading">필기 노트를 정리하고 있습니다…</string>
+    <string name="toast_proofread_success">필기 노트 정리가 완료되었습니다.</string>
     <string name="toast_proofread_failed">정리에 실패했습니다. 다시 시도해 주세요.</string>
     <string name="toast_outline_compiling">마크다운 개요서를 컴파일하는 중입니다...</string>
     <string name="toast_outline_success">설교 개요서 컴파일을 완료했습니다!</string>
     <string name="toast_outline_failed">개요 생성에 실패했습니다. 다시 시도해 주세요.</string>
 
     <!-- Detail Screen -->
-    <string name="tab_brief">요약 및 플레이어</string>
-    <string name="tab_transcript">설교 필기 노트</string>
-    <string name="tab_outline">설교 개요서 (AI)</string>
-    <string name="tab_actions">AI 작업 공간</string>
+    <string name="tab_brief">요약</string>
+    <string name="tab_transcript">필기 노트</string>
+    <string name="tab_outline">개요서</string>
+    <string name="tab_actions">도구</string>
     <string name="sermon_metadata_title">설교 상세 정보</string>
     <string name="metadata_length">길이</string>
     <string name="metadata_date">녹음 일시</string>
@@ -76,8 +76,8 @@
     <string name="no_outline">작성된 개요가 없습니다. \'다시 컴파일\'을 눌러 생성을 시작하세요.</string>
     
     <!-- Actions Tab -->
-    <string name="ai_ops_title">Pulpit AI 작업대</string>
-    <string name="theological_proofreading_title">AI 신학 문맥 교정</string>
+    <string name="ai_ops_title">설교 가공 작업대</string>
+    <string name="theological_proofreading_title">신학 문맥 맞춤법 교정</string>
     <string name="theological_proofreading_desc">신학 문맥 분석 및 오탈자 검사기를 수행하여 문장을 다듬고, 인용된 성경 구절을 올바르게 볼드 처리하며 성경 구절 표기법을 표준식으로 포맷팅합니다.</string>
     <string name="recompile_outline_title">설교 개요서 재생성</string>
     <string name="recompile_outline_desc">수정 및 편집된 필기 노트 기록들을 기반으로 전체 마크다운 개요서 및 주보용 카드 뉴스를 동적으로 다시 작성합니다.</string>
@@ -88,7 +88,7 @@
     <string name="copied_toast">%1$s 클립보드에 복사되었습니다!</string>
 
     <!-- Whisper Manager -->
-    <string name="whisper_manager_title">Whisper AI 모델 설정</string>
+    <string name="whisper_manager_title">필기 엔진 모델 설정</string>
     <string name="storage_used">로컬 저장소 사용량:</string>
     <string name="model_tiny_title">Whisper Tiny (초경량 모델)</string>
     <string name="model_tiny_desc">가장 빠름, 비교적 낮은 정확도. 저장 공간이 부족하거나 사양이 낮은 기기 권장.</string>
@@ -103,10 +103,15 @@
     <string name="delete_button">모델 파일 삭제</string>
     <string name="selected_label">사용 중</string>
     <string name="select_label">선택</string>
-    <string name="whisper_info">모델을 한 번만 다운로드하면 이후 모든 녹음의 전사, 요약, 개요 작성이 인터넷 연결 없이 기기에서 직접 처리됩니다.</string>
-    <string name="whisper_info_aikey">모든 AI 기능은 기기 내에서 완전 오프라인으로 동작합니다.</string>
+    <string name="whisper_info">모델을 한 번만 다운로드하면 이후 모든 녹음의 필기 작성, 요약, 개요 작성이 인터넷 연결 없이 기기에서 직접 처리됩니다.</string>
+    <string name="whisper_info_aikey">모든 기능은 기기 내에서 완전 오프라인으로 동작합니다.</string>
     <string name="toast_download_start">Whisper %1$s 모델 다운로드를 시작합니다...</string>
     <string name="toast_download_success">Whisper %1$s 모델 다운로드가 성공적으로 완료되었습니다!</string>
     <string name="toast_download_failed">모델 다운로드에 실패했습니다. 인터넷 상태를 확인해 주세요.</string>
     <string name="toast_delete_success">저장 용량 확보를 위해 Whisper %1$s 모델을 제거했습니다.</string>
+    
+    <!-- Audio Import Strings -->
+    <string name="import_audio">오디오 파일 가져오기</string>
+    <string name="toast_import_success">설교 파일 가져오기 완료: %1$s</string>
+    <string name="toast_import_failed">오디오 파일을 가져오지 못했습니다.</string>
 </resources>

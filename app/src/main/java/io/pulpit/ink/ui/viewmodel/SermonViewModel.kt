@@ -17,7 +17,11 @@ import io.pulpit.ink.ui.audio.AudioEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.File
+import java.io.FileOutputStream
 import java.util.Locale
+import android.net.Uri
+import android.media.MediaMetadataRetriever
+import android.provider.OpenableColumns
 
 class SermonViewModel(
     private val context: Context,
@@ -89,7 +93,24 @@ class SermonViewModel(
     val newJobFlow: SharedFlow<String> = _newJobFlow.asSharedFlow()
 
     // Whisper Model State Flows
-    val selectedWhisperModel = MutableStateFlow(context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE).getString("selected_model", "base") ?: "base")
+    val selectedWhisperModel = MutableStateFlow(
+        context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
+            .getString("selected_model", null) ?: run {
+                // Default to first downloaded model if available, otherwise tiny
+                val downloaded = WhisperModelConfig.values().firstOrNull { whisperModelManager.isModelDownloaded(it) }
+                downloaded?.modelKey ?: "tiny"
+            }
+    )
+    
+    val isHapticFeedbackEnabled = MutableStateFlow(
+        context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
+            .getBoolean("haptic_feedback_enabled", true)
+    )
+
+    val selectedAudioPreset = MutableStateFlow(
+        context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
+            .getString("selected_audio_preset", "sermon") ?: "sermon"
+    )
     
     private val _downloadProgress = MutableStateFlow<Map<String, Int>>(emptyMap())
     val downloadProgress = _downloadProgress.asStateFlow()
@@ -100,6 +121,9 @@ class SermonViewModel(
     private val _storageUsage = MutableStateFlow(0L)
     val storageUsage = _storageUsage.asStateFlow()
 
+    private val _transcriptionProgress = MutableStateFlow<Map<String, Int>>(emptyMap())
+    val transcriptionProgress = _transcriptionProgress.asStateFlow()
+
     init {
         refreshWhisperStates()
         viewModelScope.launch {
@@ -108,8 +132,32 @@ class SermonViewModel(
             repository.resetStuckTranscribingJobs()
         }
         viewModelScope.launch {
+            SermonRepository.transcriptionProgress.collect { progressMap ->
+                _transcriptionProgress.value = progressMap
+            }
+        }
+        viewModelScope.launch {
             io.pulpit.ink.ui.audio.AudioRecordingService.newJobIdFlow.collect { jobId ->
                 _newJobFlow.emit(jobId)
+            }
+        }
+        viewModelScope.launch {
+            io.pulpit.ink.ui.audio.ModelDownloadService.downloadState.collect { states ->
+                val current = _downloadState.value.toMutableMap()
+                states.forEach { (k, v) ->
+                    current[k] = v
+                }
+                _downloadState.value = current
+                refreshWhisperStates()
+            }
+        }
+        viewModelScope.launch {
+            io.pulpit.ink.ui.audio.ModelDownloadService.downloadProgress.collect { progressMap ->
+                val current = _downloadProgress.value.toMutableMap()
+                progressMap.forEach { (k, v) ->
+                    current[k] = v
+                }
+                _downloadProgress.value = current
             }
         }
     }
@@ -130,14 +178,32 @@ class SermonViewModel(
 
     fun refreshWhisperStates() {
         viewModelScope.launch {
+            val serviceStates = io.pulpit.ink.ui.audio.ModelDownloadService.downloadState.value
             val stateMap = mutableMapOf<String, String>()
             WhisperModelConfig.values().forEach { config ->
-                val isDownloaded = whisperModelManager.isModelDownloaded(config)
-                stateMap[config.modelKey] = if (isDownloaded) "downloaded" else "not_downloaded"
+                val activeServiceState = serviceStates[config.modelKey]
+                if (activeServiceState == "downloading") {
+                    stateMap[config.modelKey] = "downloading"
+                } else {
+                    val isDownloaded = whisperModelManager.isModelDownloaded(config)
+                    stateMap[config.modelKey] = if (isDownloaded) "downloaded" else "not_downloaded"
+                }
             }
             _downloadState.value = stateMap
             _storageUsage.value = whisperModelManager.getStorageUsageBytes()
         }
+    }
+
+    fun cancelWhisperModelDownload(modelKey: String) {
+        val intent = android.content.Intent(context, io.pulpit.ink.ui.audio.ModelDownloadService::class.java).apply {
+            action = io.pulpit.ink.ui.audio.ModelDownloadService.ACTION_STOP_DOWNLOAD
+        }
+        context.startService(intent)
+        refreshWhisperStates()
+    }
+
+    fun cancelSermonTranscription(jobId: String) {
+        io.pulpit.ink.data.repository.TranscriptionRunner.cancel(jobId)
     }
 
     fun selectWhisperModel(modelKey: String) {
@@ -148,30 +214,26 @@ class SermonViewModel(
             .apply()
     }
 
+    fun setHapticFeedbackEnabled(enabled: Boolean) {
+        isHapticFeedbackEnabled.value = enabled
+        context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("haptic_feedback_enabled", enabled)
+            .apply()
+    }
+
+    fun setSelectedAudioPreset(preset: String) {
+        selectedAudioPreset.value = preset
+        context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("selected_audio_preset", preset)
+            .apply()
+    }
+
     fun downloadWhisperModel(modelKey: String) {
         val config = WhisperModelConfig.fromKey(modelKey)
-        
-        // Update state map to show downloading status
-        val currentStates = _downloadState.value.toMutableMap()
-        currentStates[modelKey] = "downloading"
-        _downloadState.value = currentStates
-
         postUiEvent(context.getString(R.string.toast_download_start, config.modelKey))
-
-        viewModelScope.launch {
-            val success = whisperModelManager.downloadModel(config) { progress ->
-                val currentProgress = _downloadProgress.value.toMutableMap()
-                currentProgress[modelKey] = progress
-                _downloadProgress.value = currentProgress
-            }
-
-            if (success) {
-                postUiEvent(context.getString(R.string.toast_download_success, config.modelKey))
-            } else {
-                postUiEvent(context.getString(R.string.toast_download_failed))
-            }
-            refreshWhisperStates()
-        }
+        io.pulpit.ink.ui.audio.ModelDownloadService.startDownload(context, modelKey)
     }
 
     fun deleteWhisperModel(modelKey: String) {
@@ -216,24 +278,114 @@ class SermonViewModel(
     }
 
     /* =========================================================================
+       AUDIO IMPORT LOGIC
+       ========================================================================= */
+
+    fun importAudioFile(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                // 1. Get original filename and extension
+                val (originalName, ext) = getFileNameAndExtension(context, uri)
+                val finalTitle = originalName.trim().ifBlank {
+                    if (isKoreanLanguage()) "가져온 설교" else "Imported Sermon"
+                }
+
+                // 2. Generate unique local cache path
+                val localFile = File(context.filesDir, "imported_sermon_${System.currentTimeMillis()}.$ext")
+
+                // 3. Copy audio stream to local app files directory
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(localFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                if (!localFile.exists() || localFile.length() == 0L) {
+                    postUiEvent(context.getString(R.string.toast_import_failed))
+                    return@launch
+                }
+
+                // 4. Retrieve audio duration using MediaMetadataRetriever
+                var durationSec = 0.0
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, uri)
+                    val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    val durationMs = durationStr?.toLongOrNull() ?: 0L
+                    durationSec = durationMs / 1000.0
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to get duration using retriever, estimating by file size", e)
+                    durationSec = (localFile.length() / 12000.0).coerceAtLeast(1.0)
+                } finally {
+                    try {
+                        retriever.release()
+                    } catch (_: Exception) {}
+                }
+
+                // 5. Create a new SermonJob row in the DB
+                val jobId = repository.createNewJob(
+                    title = finalTitle,
+                    audioPath = localFile.absolutePath,
+                    durationSec = durationSec
+                )
+
+                // 6. Trigger auto-navigation to DetailScreen
+                _newJobFlow.emit(jobId)
+
+                // 7. Enqueue transcription job using selected/fallback Whisper model
+                triggerTranscription(jobId)
+
+                postUiEvent(context.getString(R.string.toast_import_success, finalTitle))
+            } catch (e: Exception) {
+                Log.e(TAG, "Error importing audio file", e)
+                postUiEvent(context.getString(R.string.toast_import_failed))
+            }
+        }
+    }
+
+    private fun getFileNameAndExtension(context: Context, uri: Uri): Pair<String, String> {
+        var name = "imported_sermon_${System.currentTimeMillis()}"
+        var ext = "mp3"
+
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1) {
+                    val displayName = it.getString(nameIndex)
+                    if (!displayName.isNullOrBlank()) {
+                        val dotIndex = displayName.lastIndexOf('.')
+                        if (dotIndex != -1) {
+                            name = displayName.substring(0, dotIndex)
+                            ext = displayName.substring(dotIndex + 1)
+                        } else {
+                            name = displayName
+                        }
+                    }
+                }
+            }
+        }
+        return Pair(name, ext)
+    }
+
+    /* =========================================================================
        API TRANSCRIPTION & POST-PROCESSING ENGINE
        ========================================================================= */
 
     fun triggerTranscription(jobId: String, themeHint: String? = null) {
-        // Guard: refuse to start if the chosen model isn't installed. Without this the
-        // factory would silently fall through to the (deprecated) online engine and the
-        // failure would only surface deep in the transcription pipeline.
         val modelKey = selectedWhisperModel.value
         val config = WhisperModelConfig.fromKey(modelKey)
-        if (!whisperModelManager.isModelDownloaded(config)) {
+        val hasAnyModel = WhisperModelConfig.values().any { whisperModelManager.isModelDownloaded(it) }
+
+        if (!whisperModelManager.isModelDownloaded(config) && !hasAnyModel) {
             postUiEvent(context.getString(R.string.transcription_failed))
             viewModelScope.launch {
                 repository.markJobFailed(
                     jobId,
                     if (isKoreanLanguage())
-                        "Whisper '$modelKey' 모델이 설치되어 있지 않습니다. 설정에서 먼저 다운로드해 주세요."
+                        "설치된 전사 엔진 모델이 없습니다. 설정에서 먼저 다운로드해 주세요."
                     else
-                        "Whisper '$modelKey' model is not installed. Please download it from settings first."
+                        "No transcription model is installed. Please download one from settings first."
                 )
             }
             return

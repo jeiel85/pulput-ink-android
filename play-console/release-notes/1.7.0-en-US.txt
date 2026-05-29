@@ -1,0 +1,13 @@
+Redesigned the Settings menu to be cleaner and highly responsive.
+
+1. Organized Layout:
+- Grouped settings by topic (Engine, Filters, Haptics) so you can find features at a glance.
+
+2. Fluid Transitions:
+- Added smooth slide transitions for a premium mobile experience.
+
+3. Quick Haptic Switch:
+- Placed the vibration toggle on the main settings screen for immediate access.
+
+4. Polished Presets:
+- Refined text alignment to ensure all options are readable on any screen size.

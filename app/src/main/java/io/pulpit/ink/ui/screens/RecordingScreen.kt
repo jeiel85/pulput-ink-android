@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.pulpit.ink.R
 import io.pulpit.ink.ui.viewmodel.SermonViewModel
+import io.pulpit.ink.ui.theme.bounceClickable
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -234,7 +235,7 @@ fun RecordingScreen(
                                 .size(92.dp)
                                 .clip(CircleShape)
                                 .background(primaryEmerald.copy(alpha = 0.15f))
-                                .clickable { viewModel.startRecording(sermonTitle, sermonFocusTopic) }
+                                .bounceClickable { viewModel.startRecording(sermonTitle, sermonFocusTopic) }
                                 .testTag("mic_trigger_button"),
                             contentAlignment = Alignment.Center
                         ) {
@@ -310,7 +311,7 @@ fun RecordingScreen(
                                         .size(68.dp)
                                         .clip(CircleShape)
                                         .background(recordingRed)
-                                        .clickable {
+                                        .bounceClickable {
                                             viewModel.stopRecordingAndSave(sermonTitle, sermonFocusTopic)
                                             onNavigateBack()
                                         }
