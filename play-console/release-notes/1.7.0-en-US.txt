@@ -1,13 +1,8 @@
-Redesigned the Settings menu to be cleaner and highly responsive.
+Getting started is now much friendlier.
 
-1. Organized Layout:
-- Grouped settings by topic (Engine, Filters, Haptics) so you can find features at a glance.
+• New first-run guide — see what you can do the moment you open the app.
+• Automatic model setup — the model needed for transcription is prepared for you, so you can start right away without digging through settings.
+• Refreshed Settings — grouped by topic, with smooth transitions and the haptics switch right up front.
+• Polished layout so text stays readable on any screen.
 
-2. Fluid Transitions:
-- Added smooth slide transitions for a premium mobile experience.
-
-3. Quick Haptic Switch:
-- Placed the vibration toggle on the main settings screen for immediate access.
-
-4. Polished Presets:
-- Refined text alignment to ensure all options are readable on any screen size.
+Your recordings and transcripts stay entirely on your device.
