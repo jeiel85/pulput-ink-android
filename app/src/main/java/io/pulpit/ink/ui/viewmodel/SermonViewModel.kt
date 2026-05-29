@@ -13,6 +13,7 @@ import io.pulpit.ink.data.repository.SermonRepository
 import io.pulpit.ink.data.repository.TranscriptionRunner
 import io.pulpit.ink.data.api.WhisperModelManager
 import io.pulpit.ink.data.api.WhisperModelConfig
+import io.pulpit.ink.data.api.AssetModelDelivery
 import io.pulpit.ink.ui.audio.AudioEngine
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -31,6 +32,10 @@ class SermonViewModel(
     private val TAG = "SermonViewModel"
     private val audioEngine = AudioEngine(context)
     private val whisperModelManager = WhisperModelManager(context)
+    private val assetModelDelivery = AssetModelDelivery(context)
+
+    private val prefs
+        get() = context.getSharedPreferences("whisper_prefs", Context.MODE_PRIVATE)
 
     // Search query states
     val searchQuery = MutableStateFlow("")
@@ -123,6 +128,15 @@ class SermonViewModel(
 
     private val _transcriptionProgress = MutableStateFlow<Map<String, Int>>(emptyMap())
     val transcriptionProgress = _transcriptionProgress.asStateFlow()
+
+    // First-launch onboarding state
+    val onboardingCompleted = MutableStateFlow(prefs.getBoolean("onboarding_completed", false))
+
+    // Play Asset Delivery progress for the bundled base model (null until started).
+    private val _baseDelivery = MutableStateFlow<AssetModelDelivery.Progress?>(null)
+    val baseDelivery: StateFlow<AssetModelDelivery.Progress?> = _baseDelivery.asStateFlow()
+
+    private var baseDeliveryJob: Job? = null
 
     init {
         refreshWhisperStates()
@@ -234,6 +248,53 @@ class SermonViewModel(
         val config = WhisperModelConfig.fromKey(modelKey)
         postUiEvent(context.getString(R.string.toast_download_start, config.modelKey))
         io.pulpit.ink.ui.audio.ModelDownloadService.startDownload(context, modelKey)
+    }
+
+    /* =========================================================================
+       ONBOARDING + BUNDLED MODEL DELIVERY
+       ========================================================================= */
+
+    fun completeOnboarding() {
+        onboardingCompleted.value = true
+        prefs.edit().putBoolean("onboarding_completed", true).apply()
+    }
+
+    /**
+     * Ensures the default (base) model becomes available during onboarding.
+     * Prefers the Play Asset Delivery fast-follow pack; if the app was sideloaded
+     * (Play never delivers the pack) it falls back to a direct Hugging Face
+     * download via [ModelDownloadService]. Idempotent.
+     */
+    fun ensureBaseModelForOnboarding() {
+        if (whisperModelManager.isModelDownloaded(WhisperModelConfig.BASE)) {
+            _baseDelivery.value = AssetModelDelivery.Progress(
+                AssetModelDelivery.Status.COMPLETED, 1, 1
+            )
+            selectWhisperModel("base")
+            refreshWhisperStates()
+            return
+        }
+        if (baseDeliveryJob?.isActive == true) return
+        baseDeliveryJob = viewModelScope.launch {
+            assetModelDelivery.observeBaseModelDelivery().collect { progress ->
+                _baseDelivery.value = progress
+                when (progress.status) {
+                    AssetModelDelivery.Status.COMPLETED -> {
+                        selectWhisperModel("base")
+                        refreshWhisperStates()
+                    }
+                    AssetModelDelivery.Status.NOT_DELIVERED,
+                    AssetModelDelivery.Status.FAILED -> {
+                        // No Play delivery (sideload/debug) — fall back to direct
+                        // download. Its progress surfaces via downloadState["base"].
+                        if (!whisperModelManager.isModelDownloaded(WhisperModelConfig.BASE)) {
+                            downloadWhisperModel("base")
+                        }
+                    }
+                    else -> { /* in-progress states drive the progress bar */ }
+                }
+            }
+        }
     }
 
     fun deleteWhisperModel(modelKey: String) {

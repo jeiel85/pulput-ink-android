@@ -29,15 +29,14 @@ class OfflineWhisperEngine(private val context: Context) : SpeechToTextEngine {
             )
         }
 
-        // 2. Locate downloaded model configuration
+        // 2. Locate the model file — PAD-bundled copy (base) first, then any
+        // copy downloaded into app storage.
         val config = WhisperModelConfig.fromKey(modelKey)
-        val modelFile = modelManager.getModelFile(config)
-        if (!modelFile.exists() || modelFile.length() == 0L) {
-            throw IllegalStateException(
-                "Local model file for '$modelKey' is not found or corrupted at: ${modelFile.absolutePath}. " +
+        val modelFile = modelManager.resolveModelFile(config)
+            ?: throw IllegalStateException(
+                "Local model file for '$modelKey' is not found or corrupted. " +
                 "Please download the model from settings first."
             )
-        }
 
         // 3. Decode compressed audio (.m4a) to raw PCM Float array
         Log.d(TAG, "Decoding audio file to PCM...")

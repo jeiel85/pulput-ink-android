@@ -100,6 +100,15 @@ if ($combinedNotes -ne "") {
 
 # 5. Build AAB Bundle via Gradle
 if (-not $SkipBuild) {
+  # 5a. Ensure the Play Asset Delivery model binary is present before bundling.
+  # The 142 MB ggml-base.bin is not committed; the :base_model asset pack would
+  # ship empty without it, breaking the post-install auto-download.
+  Write-Host "번들 모델 바이너리 확보 중 (fetch-base-model.ps1)..."
+  & (Join-Path $PSScriptRoot "fetch-base-model.ps1")
+  if ($LASTEXITCODE -ne 0) {
+    throw "fetch-base-model.ps1 실패 — ggml-base.bin 확보 불가. 번들 빌드를 중단합니다."
+  }
+
   Write-Host "Gradle 릴리즈 AAB 빌드를 시작합니다 (gradlew :app:bundleRelease)..."
   Push-Location $root
   try {

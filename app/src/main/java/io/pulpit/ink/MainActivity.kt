@@ -27,6 +27,7 @@ import io.pulpit.ink.data.db.AppDatabase
 import io.pulpit.ink.data.repository.SermonRepository
 import io.pulpit.ink.ui.screens.DetailScreen
 import io.pulpit.ink.ui.screens.HomeScreen
+import io.pulpit.ink.ui.screens.OnboardingScreen
 import io.pulpit.ink.ui.screens.RecordingScreen
 import io.pulpit.ink.ui.theme.MyApplicationTheme
 import io.pulpit.ink.ui.viewmodel.SermonViewModel
@@ -110,11 +111,24 @@ fun MainAppHost(viewModel: SermonViewModel) {
     }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        val startDestination = if (viewModel.onboardingCompleted.value) "home" else "onboarding"
         NavHost(
             navController = navController,
-            startDestination = "home",
+            startDestination = startDestination,
             modifier = Modifier.fillMaxSize()
         ) {
+            // Screen 0: First-launch onboarding
+            composable("onboarding") {
+                OnboardingScreen(
+                    viewModel = viewModel,
+                    onFinish = {
+                        navController.navigate("home") {
+                            popUpTo("onboarding") { inclusive = true }
+                        }
+                    }
+                )
+            }
+
             // Screen 1: Dashboard Home
             composable("home") {
                 HomeScreen(
