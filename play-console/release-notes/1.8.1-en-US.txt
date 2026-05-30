@@ -1,0 +1,7 @@
+Back navigation now feels much more natural.
+
+• Pressing back steps you to the previous screen one level at a time instead of suddenly closing the app.
+• In Settings, pressing back from a detail page (models / preprocessing) returns you to the main Settings screen.
+• If you tap back by mistake while recording, it no longer discards instantly — you're asked to confirm first, protecting your recording.
+
+Your recordings and transcripts stay entirely on your device.
