@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.ExperimentalFoundationApi
 import io.pulpit.ink.ui.theme.bounceClickable
+import androidx.activity.compose.BackHandler
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -65,6 +66,14 @@ fun DetailScreen(
 
     val pagerState = rememberPagerState(pageCount = { 4 })
     val coroutineScope = rememberCoroutineScope()
+
+    // System back should follow the same path as the toolbar back button:
+    // clear the active selection, then pop one depth back to Home — never
+    // skip straight out of the screen with a stale selection lingering.
+    BackHandler {
+        viewModel.selectSermon(null)
+        onNavigateBack()
+    }
 
     // Automatically shift to Transcript tab once the sermon transcription completes successfully
     LaunchedEffect(activeJob) {

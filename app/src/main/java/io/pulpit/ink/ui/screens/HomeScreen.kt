@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.draw.clip
@@ -370,6 +371,13 @@ fun HomeScreen(
                 }
             },
             text = {
+                // Respect in-dialog depth: when inside a sub-screen, system back
+                // should return to MAIN instead of dismissing the whole dialog.
+                // Composed inside the dialog window so it intercepts the dialog's
+                // own dismiss-on-back handler.
+                BackHandler(enabled = currentScreen != SettingsScreen.MAIN) {
+                    currentScreen = SettingsScreen.MAIN
+                }
                 AnimatedContent(
                     targetState = currentScreen,
                     transitionSpec = {

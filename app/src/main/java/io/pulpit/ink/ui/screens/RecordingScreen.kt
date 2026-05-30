@@ -1,5 +1,6 @@
 package io.pulpit.ink.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -38,6 +39,24 @@ fun RecordingScreen(
     var sermonTitle by remember { mutableStateOf("") }
     var sermonFocusTopic by remember { mutableStateOf("") }
     var showTranscribeConfirmDialog by remember { mutableStateOf(false) }
+    var showDiscardConfirmDialog by remember { mutableStateOf(false) }
+
+    // Unified back behaviour for both the toolbar arrow and the system back
+    // gesture: while a recording is live, leaving silently throws away the
+    // capture, so step into a confirmation depth first instead of exiting.
+    val handleBack: () -> Unit = {
+        if (isRecording) {
+            showDiscardConfirmDialog = true
+        } else {
+            onNavigateBack()
+        }
+    }
+
+    // Intercept system back only while recording; otherwise let NavHost pop
+    // this screen normally back to Home.
+    BackHandler(enabled = isRecording) {
+        showDiscardConfirmDialog = true
+    }
 
     // Elegant Dark Theme Palette
     val deepInk = Color(0xFFE6E1E5)
@@ -71,7 +90,7 @@ fun RecordingScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = handleBack) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = null,
@@ -398,6 +417,54 @@ fun RecordingScreen(
                 TextButton(onClick = { showTranscribeConfirmDialog = false }) {
                     Text(
                         text = if (isKo) "취소" else "Cancel",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        )
+    }
+
+    if (showDiscardConfirmDialog) {
+        val isKo = java.util.Locale.getDefault().language == "ko"
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirmDialog = false },
+            title = {
+                Text(
+                    text = if (isKo) "녹음을 취소할까요?" else "Discard recording?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = if (isKo) {
+                        "지금 나가면 진행 중인 녹음이 저장되지 않고 삭제됩니다."
+                    } else {
+                        "Leaving now discards the recording in progress — it will not be saved."
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDiscardConfirmDialog = false
+                        viewModel.cancelRecording()
+                        onNavigateBack()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))
+                ) {
+                    Text(
+                        text = if (isKo) "삭제하고 나가기" else "Discard & Leave",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirmDialog = false }) {
+                    Text(
+                        text = if (isKo) "계속 녹음" else "Keep Recording",
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
